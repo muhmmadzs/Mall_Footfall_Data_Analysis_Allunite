@@ -1,0 +1,435 @@
+{
+  "plan": "B",
+  "methods": {
+    "plan_a": "footfall_plan_a (global trusted linear, sensor-hour)",
+    "plan_b": "footfall_plan_b (capture \u00d7 HOD v2 \u00d7 density, mall-hour dedup)",
+    "mall_visitors": "estimated_mall_visitors (mall dedup devices \u00d7 capture)"
+  },
+  "task1_models": [
+    {
+      "target": "total_ped_bikes",
+      "model": "global_linear_trusted_unique_devices",
+      "feature": "trusted_unique_devices",
+      "intercept": 516.9755907556479,
+      "slope": 2.3495196052973246,
+      "mae": 17.014541677486335,
+      "mape": 0.029670876338133256,
+      "r2": 0.7996709821219614,
+      "coef_clean": NaN
+    },
+    {
+      "target": "total_ped_bikes",
+      "model": "global_linear_clean_unique_devices",
+      "feature": "clean_unique_devices",
+      "intercept": 532.5947188693715,
+      "slope": 0.01552819989754704,
+      "mae": 24.62030336570092,
+      "mape": 0.042474044037796144,
+      "r2": 0.530108351723602,
+      "coef_clean": NaN
+    },
+    {
+      "target": "total_ped_bikes",
+      "model": "global_linear_local_unique_devices",
+      "feature": "local_unique_devices",
+      "intercept": 532.7620515763134,
+      "slope": 0.01555059588126584,
+      "mae": 24.581882340463153,
+      "mape": 0.04240686951475811,
+      "r2": 0.5303698492041302,
+      "coef_clean": NaN
+    },
+    {
+      "target": "pedestrians_only",
+      "model": "global_linear_clean_unique_devices",
+      "feature": "clean_unique_devices",
+      "intercept": 536.9782600478995,
+      "slope": 0.007545670046387181,
+      "mae": 21.65036692408006,
+      "mape": 0.039167079170722416,
+      "r2": 0.23038324437807034,
+      "coef_clean": NaN
+    },
+    {
+      "target": "total_ped_bikes",
+      "model": "blend_trusted_clean",
+      "feature": "trusted+clean",
+      "intercept": 517.0851474351397,
+      "slope": 2.3796736333085144,
+      "mae": 16.932169291732123,
+      "mape": 0.02951759777780106,
+      "r2": 0.799735471915623,
+      "coef_clean": -0.0002987421422075981
+    }
+  ],
+  "task1_loo_mae_mean": 59.46950501409734,
+  "task2": {
+    "total_unique_devices_clean": 2042923,
+    "multi_sensor_devices": 131320,
+    "multi_sensor_rate": 0.06428044522480779
+  },
+  "task3": {
+    "journey_devices": 131320
+  },
+  "task4": {
+    "high_session_threshold": 32.0,
+    "suspicious_unflagged_devices": 87,
+    "anomaly_hours_global": 23,
+    "anomaly_hours_robust": 180,
+    "anomaly_hours_hod": 0,
+    "anomaly_hours_consensus": 23,
+    "is_excluded": 0.001054046805904619,
+    "is_anomaly": 0.0,
+    "is_fake": 2.7129474751131542e-05,
+    "flagged_any": 0.0010811762806557505
+  },
+  "mall_visitors_daily": [
+    {
+      "date": "2026-04-20",
+      "unique_devices_mall": 252782,
+      "clean_sessions": 270265,
+      "sum_facility_uniques": 266546,
+      "footfall_plan_b": 74531.7,
+      "footfall_plan_a": 110340.73,
+      "estimated_mall_visitors": 47114.07
+    },
+    {
+      "date": "2026-04-21",
+      "unique_devices_mall": 155877,
+      "clean_sessions": 169714,
+      "sum_facility_uniques": 166885,
+      "footfall_plan_b": 41011.57,
+      "footfall_plan_a": 112108.21,
+      "estimated_mall_visitors": 29052.7
+    },
+    {
+      "date": "2026-04-22",
+      "unique_devices_mall": 255219,
+      "clean_sessions": 276625,
+      "sum_facility_uniques": 272955,
+      "footfall_plan_b": 75765.93,
+      "footfall_plan_a": 113679.91,
+      "estimated_mall_visitors": 47568.29
+    },
+    {
+      "date": "2026-04-23",
+      "unique_devices_mall": 235150,
+      "clean_sessions": 250575,
+      "sum_facility_uniques": 247378,
+      "footfall_plan_b": 67603.4,
+      "footfall_plan_a": 110989.3,
+      "estimated_mall_visitors": 43827.78
+    },
+    {
+      "date": "2026-04-24",
+      "unique_devices_mall": 313237,
+      "clean_sessions": 338396,
+      "sum_facility_uniques": 334199,
+      "footfall_plan_b": 92473.06,
+      "footfall_plan_a": 116607.37,
+      "estimated_mall_visitors": 58381.81
+    },
+    {
+      "date": "2026-04-25",
+      "unique_devices_mall": 465724,
+      "clean_sessions": 509503,
+      "sum_facility_uniques": 504120,
+      "footfall_plan_b": 138470.11,
+      "footfall_plan_a": 114715.54,
+      "estimated_mall_visitors": 86802.68
+    },
+    {
+      "date": "2026-04-26",
+      "unique_devices_mall": 382113,
+      "clean_sessions": 422768,
+      "sum_facility_uniques": 417889,
+      "footfall_plan_b": 109566.52,
+      "footfall_plan_a": 117622.5,
+      "estimated_mall_visitors": 71219.07
+    }
+  ],
+  "daily_comparison": [
+    {
+      "date": "2026-04-20 00:00:00",
+      "footfall_plan_b": 74531.7,
+      "footfall_plan_a_on_b_grid": 110340.73,
+      "footfall_plan_a": 110340.73,
+      "estimated_mall_visitors": 47114.07,
+      "unique_devices_mall": 252782
+    },
+    {
+      "date": "2026-04-21 00:00:00",
+      "footfall_plan_b": 41011.57,
+      "footfall_plan_a_on_b_grid": 112108.21,
+      "footfall_plan_a": 112108.21,
+      "estimated_mall_visitors": 29052.7,
+      "unique_devices_mall": 155877
+    },
+    {
+      "date": "2026-04-22 00:00:00",
+      "footfall_plan_b": 75765.93,
+      "footfall_plan_a_on_b_grid": 113679.91,
+      "footfall_plan_a": 113679.91,
+      "estimated_mall_visitors": 47568.29,
+      "unique_devices_mall": 255219
+    },
+    {
+      "date": "2026-04-23 00:00:00",
+      "footfall_plan_b": 67603.4,
+      "footfall_plan_a_on_b_grid": 110989.3,
+      "footfall_plan_a": 110989.3,
+      "estimated_mall_visitors": 43827.78,
+      "unique_devices_mall": 235150
+    },
+    {
+      "date": "2026-04-24 00:00:00",
+      "footfall_plan_b": 92473.06,
+      "footfall_plan_a_on_b_grid": 116607.37,
+      "footfall_plan_a": 116607.37,
+      "estimated_mall_visitors": 58381.81,
+      "unique_devices_mall": 313237
+    },
+    {
+      "date": "2026-04-25 00:00:00",
+      "footfall_plan_b": 138470.11,
+      "footfall_plan_a_on_b_grid": 114715.54,
+      "footfall_plan_a": 114715.54,
+      "estimated_mall_visitors": 86802.68,
+      "unique_devices_mall": 465724
+    },
+    {
+      "date": "2026-04-26 00:00:00",
+      "footfall_plan_b": 109566.52,
+      "footfall_plan_a_on_b_grid": 117622.5,
+      "footfall_plan_a": 117622.5,
+      "estimated_mall_visitors": 71219.07,
+      "unique_devices_mall": 382113
+    }
+  ],
+  "meta": {
+    "primary_method_plan_b": "footfall_plan_b",
+    "plan_b_hod": "hod_v2 manual-anchored + shrinkage + density (LOO-tuned)",
+    "hod_v2_params": {
+      "shrink_tau": 2.0,
+      "smooth_tau": 2.0,
+      "density_beta": 0.15,
+      "profile_alpha": 0.0,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15
+    },
+    "hod_v2_loo_mae": 347.189891098917,
+    "hod_v2_calibration_validation": [
+      {
+        "facility_num": 66330,
+        "started": "2026-04-23 13:00:00+00:00",
+        "hour_of_day": 13,
+        "manual_total_count": 651.0,
+        "predicted_plan_b_v2": 698.0,
+        "abs_error": 47.0,
+        "pct_error": 7.22
+      },
+      {
+        "facility_num": 66330,
+        "started": "2026-04-24 13:00:00+00:00",
+        "hour_of_day": 13,
+        "manual_total_count": 550.0,
+        "predicted_plan_b_v2": 467.5,
+        "abs_error": 82.5,
+        "pct_error": 15.0
+      },
+      {
+        "facility_num": 66333,
+        "started": "2026-04-23 15:00:00+00:00",
+        "hour_of_day": 15,
+        "manual_total_count": 565.0,
+        "predicted_plan_b_v2": 171.65,
+        "abs_error": 393.35,
+        "pct_error": 69.62
+      },
+      {
+        "facility_num": 66333,
+        "started": "2026-04-24 15:00:00+00:00",
+        "hour_of_day": 15,
+        "manual_total_count": 558.0,
+        "predicted_plan_b_v2": 474.3,
+        "abs_error": 83.7,
+        "pct_error": 15.0
+      }
+    ],
+    "hod_v2_tune_grid_top": [
+      {
+        "shrink_tau": 3.0,
+        "smooth_tau": 4.0,
+        "density_beta": 0.2,
+        "profile_alpha": 0.2,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 3.0,
+        "density_beta": 0.2,
+        "profile_alpha": 0.0,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 3.0,
+        "density_beta": 0.15,
+        "profile_alpha": 0.2,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 3.0,
+        "density_beta": 0.15,
+        "profile_alpha": 0.15,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 3.0,
+        "density_beta": 0.15,
+        "profile_alpha": 0.0,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 2.0,
+        "density_beta": 0.2,
+        "profile_alpha": 0.2,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 2.0,
+        "density_beta": 0.2,
+        "profile_alpha": 0.15,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 2.0,
+        "density_beta": 0.2,
+        "profile_alpha": 0.0,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 2.0,
+        "density_beta": 0.15,
+        "profile_alpha": 0.2,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      },
+      {
+        "shrink_tau": 4.0,
+        "smooth_tau": 2.0,
+        "density_beta": 0.15,
+        "profile_alpha": 0.15,
+        "hod_min": 0.5,
+        "hod_max": 1.25,
+        "density_clip_min": 0.85,
+        "density_clip_max": 1.15,
+        "loo_mae": 347.189891098917
+      }
+    ],
+    "plan_b_device_assignment": "one primary sensor per device per hour (max signal_level)",
+    "plan_b_dedup_note": "footfall_plan_b uses clean_unique_devices_dedup; footfall_plan_b_per_sensor uses per-sensor counts",
+    "plan_b_legacy_hod_column": "hod_factor_profile / footfall_plan_b_profile_hod",
+    "primary_mall_metric": "estimated_mall_visitors",
+    "global_clean": {
+      "name": "global_linear_clean_unique_devices",
+      "feature": "clean_unique_devices",
+      "intercept": 532.5947188693715,
+      "slope": 0.01552819989754704,
+      "mae": 24.62030336570092,
+      "mape": 0.042474044037796144,
+      "r2": 0.530108351723602,
+      "per_facility": false
+    },
+    "global_trusted": {
+      "name": "global_linear_trusted_unique_devices",
+      "feature": "trusted_unique_devices",
+      "intercept": 516.9755907556479,
+      "slope": 2.3495196052973246,
+      "mae": 17.014541677486335,
+      "mape": 0.029670876338133256,
+      "r2": 0.7996709821219614,
+      "per_facility": false
+    },
+    "bootstrap_clean": {
+      "intercept_mean": 526.7604504575078,
+      "intercept_p05": 345.1534446764092,
+      "intercept_p95": 568.9700690713737,
+      "slope_mean": 0.013620727488515946,
+      "slope_p05": -0.005372217958557176,
+      "slope_p95": 0.05271398747390396
+    },
+    "neighbor_map": {
+      "66330": 66330,
+      "66333": 66333,
+      "66331": 66330,
+      "66332": 66333,
+      "66335": 66333,
+      "66336": 66333,
+      "66338": 66330,
+      "66340": 66333,
+      "66342": 66333,
+      "66328": 66333
+    },
+    "mean_mall_capture_rate": 0.18638222792525463,
+    "calibrated_facilities": [
+      66330,
+      66333
+    ],
+    "capture_rates": [
+      {
+        "facility_num": 66330,
+        "capture_rate": 0.1268681997422934,
+        "neighbor_facility": 66330
+      },
+      {
+        "facility_num": 66333,
+        "capture_rate": 0.5189040965171188,
+        "neighbor_facility": 66333
+      }
+    ]
+  }
+}

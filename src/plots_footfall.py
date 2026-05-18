@@ -232,8 +232,6 @@ def generate_all_footfall_plots(
     if multi_sensor_rate is not None:
         weekly_stats["multi_sensor_rate"] = multi_sensor_rate
 
-    daily_df.to_csv(out / "daily_device_footfall_summary.csv", index=False)
-
     plot_daily_sessions_devices(daily_df, out / "footfall_daily_sessions_and_devices.png")
     plot_daily_device_types(daily_df, out / "footfall_daily_device_types_stacked.png")
     plot_daily_footfall_vs_devices(

@@ -1,0 +1,76 @@
+{
+  "rows_sessions": 2248477,
+  "rows_facilities": 10,
+  "rows_manual_counts": 8,
+  "task1": {
+    "selected_feature": "trusted_unique_devices",
+    "intercept": 516.9755907556479,
+    "slope": 2.3495196052973246,
+    "mae": 17.014541677486335,
+    "mape": 0.029670876338133256,
+    "r2": 0.7996709821219614,
+    "calibration_windows": 4
+  },
+  "task2": {
+    "total_unique_devices_clean": 2042923,
+    "multi_sensor_devices": 131320,
+    "multi_sensor_rate": 0.06428044522480779
+  },
+  "task3": {
+    "devices_with_multifacility_paths": 131320,
+    "top_path": "66330 -> 66331",
+    "top_path_devices": 42826
+  },
+  "task4": {
+    "high_session_threshold_top_0_1pct": 32.0,
+    "suspicious_unflagged_devices": 87,
+    "is_excluded": 0.001054046805904619,
+    "is_anomaly": 0.0,
+    "is_fake": 2.7129474751131542e-05,
+    "flagged_any": 0.0010811762806557505
+  },
+  "daily_estimated_footfall": [
+    {
+      "date": "2026-04-20",
+      "estimated_total_footfall": 110340.73
+    },
+    {
+      "date": "2026-04-21",
+      "estimated_total_footfall": 112108.21
+    },
+    {
+      "date": "2026-04-22",
+      "estimated_total_footfall": 113679.91
+    },
+    {
+      "date": "2026-04-23",
+      "estimated_total_footfall": 110989.3
+    },
+    {
+      "date": "2026-04-24",
+      "estimated_total_footfall": 116607.37
+    },
+    {
+      "date": "2026-04-25",
+      "estimated_total_footfall": 114715.54
+    },
+    {
+      "date": "2026-04-26",
+      "estimated_total_footfall": 117622.5
+    }
+  ],
+  "footfall_device_trends": {
+    "daily_summary_rows": 7,
+    "total_sessions": 2248477,
+    "clean_sessions": 2237846,
+    "flagged_sessions": 2431,
+    "estimated_footfall": 796063.56,
+    "unique_devices_mall_week": 2043832,
+    "unique_devices_clean_week": 2042923,
+    "trusted_devices_week": 13126,
+    "local_devices_week": 2038900,
+    "other_devices_week": 3881,
+    "sum_facility_unique_devices_week": 2209972,
+    "multi_sensor_rate": 0.06428044522480779
+  }
+}

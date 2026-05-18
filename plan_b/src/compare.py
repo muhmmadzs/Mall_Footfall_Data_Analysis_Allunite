@@ -83,9 +83,12 @@ def plot_daily_comparison(comp: pd.DataFrame, path: Path) -> None:
 def generate_comparison_outputs(
     plan_b_hourly: pd.DataFrame,
     mall_daily: pd.DataFrame,
+    *,
+    write_outputs: bool = False,
+    plot_path: Path | None = None,
 ) -> pd.DataFrame:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     comp = build_daily_comparison(plan_b_hourly, mall_daily)
-    comp.to_csv(OUTPUT_DIR / "comparison_daily_footfall.csv", index=False)
-    plot_daily_comparison(comp, OUTPUT_DIR / "comparison_daily_footfall.png")
+    if write_outputs and plot_path is not None:
+        plot_path.parent.mkdir(parents=True, exist_ok=True)
+        plot_daily_comparison(comp, plot_path)
     return comp

@@ -1,19 +1,27 @@
 # Notebooks
 
-Single entry point: **[mall_footfall_analysis.ipynb](mall_footfall_analysis.ipynb)**
+## Single entry point
 
-Run with kernel cwd = `notebooks/` (or repo root — `notebook_helpers.py` adds the repo to `sys.path`).
+**[mall_footfall_analysis.ipynb](mall_footfall_analysis.ipynb)** — runs the full pipeline (Tasks 1–4, Plan A + B, advanced anomalies).
 
 ```python
-from notebook_helpers import run_both_plans, plot_comparison_interactive, load_comparison_daily
+from notebook_helpers import run_full_analysis, plot_full_analysis
 
-run_both_plans(force_recompute=False)
-plot_comparison_interactive(load_comparison_daily())
+results = run_full_analysis(force_recompute=True, write_outputs=False)
+plot_full_analysis(results, save_plots=True)
 ```
 
-CLI alternative:
+- **`write_outputs=False`** (default) — keep results in memory; no CSV files under `outputs/`
+- **`save_plots=True`** — PNGs only under `outputs/plots/`
+
+## Legacy per-task notebooks
+
+`task1_*.ipynb` … `task4_*.ipynb` are optional; prefer the main notebook above.
+
+## CLI
 
 ```bash
 python run_analysis.py
-python plan_b/run_analysis.py
 ```
+
+Same orchestration as the notebook; writes plots to `outputs/plots/` and a small `analysis_summary.json`.

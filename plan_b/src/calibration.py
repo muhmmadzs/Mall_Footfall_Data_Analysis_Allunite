@@ -11,9 +11,15 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, r2_score
 
 from src.cleaning import build_quality_mask
+from src.hod_v2 import (
+    HodV2Params,
+    build_hod_anchors,
+    build_hod_curves,
+    hod_v2_components,
+)
 from src.paths import CALIBRATED_FACILITIES
 
-# Clamp hour-of-day multiplier so busy/quiet hours do not explode estimates
+# Legacy profile-ratio HOD (kept for comparison)
 HOD_FACTOR_MIN = 0.5
 HOD_FACTOR_MAX = 2.0
 
@@ -265,6 +271,30 @@ def hour_of_day_profile(clean_sessions: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def mall_hour_primary_facility_counts(sessions: pd.DataFrame) -> pd.DataFrame:
+    """
+    Assign each device to one primary sensor per clock hour (strongest signal),
+    then count unique devices per (facility, hour). Avoids double-counting the same
+    phone at multiple sensors in the same hour.
+    """
+    clean = sessions.loc[build_quality_mask(sessions)].copy()
+    clean["hour_start"] = pd.to_datetime(clean["session_start"]).dt.floor("h")
+    idx = clean.groupby(["hour_start", "device_id"], sort=False)["signal_level"].idxmax()
+    assigned = clean.loc[idx, ["hour_start", "device_id", "facility_num", "is_trusted"]]
+
+    counts = assigned.groupby(["facility_num", "hour_start"], as_index=False).agg(
+        clean_unique_devices_dedup=("device_id", "nunique"),
+    )
+    trusted = (
+        assigned.loc[assigned["is_trusted"]]
+        .groupby(["facility_num", "hour_start"], as_index=False)
+        .agg(trusted_unique_devices_dedup=("device_id", "nunique"))
+    )
+    counts = counts.merge(trusted, on=["facility_num", "hour_start"], how="left")
+    counts["trusted_unique_devices_dedup"] = counts["trusted_unique_devices_dedup"].fillna(0)
+    return counts
+
+
 def assign_facility_neighbors(
     facilities: pd.DataFrame, calibrated: Optional[set[int]] = None
 ) -> Dict[int, int]:
@@ -286,6 +316,32 @@ def assign_facility_neighbors(
     return mapping
 
 
+def _profile_ratio_hod(
+    fac: int,
+    hod: int,
+    prof_devices: float,
+    cal_df: pd.DataFrame,
+    prof: pd.Series,
+    neighbor_map: Dict[int, int],
+) -> float:
+    """Legacy HOD: median calibration-hour profile / this hour's profile."""
+    try:
+        prof_val = float(prof.loc[(fac, hod)])
+    except KeyError:
+        prof_val = prof_devices if prof_devices > 0 else 1.0
+    prof_val = max(prof_val, 1.0)
+    ref_fac = fac if fac in CALIBRATED_FACILITIES else neighbor_map.get(fac, fac)
+    ref_hours = cal_df.loc[cal_df["facility_num"] == ref_fac, "hour_of_day"].tolist()
+    if ref_hours:
+        ref_prof = np.median(
+            [prof.loc[(ref_fac, h)] for h in ref_hours if (ref_fac, h) in prof.index]
+        )
+    else:
+        ref_prof = prof_val
+    ref_prof = max(float(ref_prof), 1.0)
+    return float(np.clip(ref_prof / prof_val, HOD_FACTOR_MIN, HOD_FACTOR_MAX))
+
+
 def apply_plan_b_estimates(
     hourly: pd.DataFrame,
     cal_df: pd.DataFrame,
@@ -293,11 +349,13 @@ def apply_plan_b_estimates(
     profile: pd.DataFrame,
     global_trusted: ModelSpec,
     neighbor_map: Dict[int, int],
+    hod_params: Optional[HodV2Params] = None,
 ) -> pd.DataFrame:
-    """Plan B sensor-hour footfall + Plan A on same grid for comparison."""
+    """Plan B sensor-hour footfall (HOD v2) + legacy profile HOD for comparison."""
     out = hourly.copy()
     cap_map = dict(zip(capture_rates["facility_num"], capture_rates["mean_capture_rate"]))
     prof = profile.set_index(["facility_num", "hour_of_day"])["profile_median_devices"]
+    params = hod_params or HodV2Params()
 
     out["footfall_plan_a"] = (
         global_trusted.intercept + global_trusted.slope * out["trusted_unique_devices"]
@@ -308,34 +366,50 @@ def apply_plan_b_estimates(
         if fac not in cap_map and neighbor in cap_map:
             out.loc[out["facility_num"] == fac, "capture_rate_facility"] = cap_map[neighbor]
 
-    # Hour-of-day adjusted capture rate (factor clamped to avoid runaway scaling)
+    has_dedup = "clean_unique_devices_dedup" in out.columns
+    if not has_dedup:
+        out["clean_unique_devices_dedup"] = out["clean_unique_devices"]
+        out["trusted_unique_devices_dedup"] = out.get(
+            "trusted_unique_devices", pd.Series(0, index=out.index)
+        )
+
+    anchors = build_hod_anchors(cal_df, cap_map)
+    facilities = sorted(out["facility_num"].astype(int).unique().tolist())
+    hod_curves = build_hod_curves(anchors, neighbor_map, facilities, params)
+
     hod_factors: List[float] = []
-    hod_est: List[float] = []
+    hod_profile: List[float] = []
+    density_factors: List[float] = []
+    footfall_b_dedup: List[float] = []
+    footfall_b_sensor: List[float] = []
+    footfall_profile: List[float] = []
+
     for row in out.itertuples(index=False):
         fac = int(row.facility_num)
         hod = int(row.hour_of_day)
-        devices = float(row.clean_unique_devices)
-        rate = cap_map.get(fac) or cap_map.get(neighbor_map.get(fac, fac), 0.1)
-        try:
-            prof_val = float(prof.loc[(fac, hod)])
-        except KeyError:
-            prof_val = devices if devices > 0 else 1.0
-        prof_val = max(prof_val, 1.0)
-        ref_fac = fac if fac in CALIBRATED_FACILITIES else neighbor_map.get(fac, fac)
-        ref_hours = cal_df.loc[cal_df["facility_num"] == ref_fac, "hour_of_day"].tolist()
-        if ref_hours:
-            ref_prof = np.median(
-                [prof.loc[(ref_fac, h)] for h in ref_hours if (ref_fac, h) in prof.index]
-            )
-        else:
-            ref_prof = prof_val
-        ref_prof = max(float(ref_prof), 1.0)
-        raw_factor = ref_prof / prof_val
-        hod_factor = float(np.clip(raw_factor, HOD_FACTOR_MIN, HOD_FACTOR_MAX))
-        hod_factors.append(hod_factor)
-        hod_est.append(devices * rate * hod_factor)
+        devices_sensor = float(row.clean_unique_devices)
+        devices_dedup = float(row.clean_unique_devices_dedup)
+        rate = float(cap_map.get(fac) or cap_map.get(neighbor_map.get(fac, fac), 0.1))
+        prof_devices = devices_dedup if devices_dedup > 0 else devices_sensor
+
+        hod_prof = _profile_ratio_hod(fac, hod, prof_devices, cal_df, prof, neighbor_map)
+        hod_v2, dens, _ = hod_v2_components(
+            fac, hod, prof_devices, cal_df, cap_map, prof, neighbor_map, hod_curves, params
+        )
+
+        hod_factors.append(hod_v2)
+        hod_profile.append(hod_prof)
+        density_factors.append(dens)
+        footfall_b_dedup.append(devices_dedup * rate * hod_v2 * dens)
+        footfall_b_sensor.append(devices_sensor * rate * hod_v2 * dens)
+        footfall_profile.append(devices_dedup * rate * hod_prof)
+
     out["hod_factor"] = hod_factors
-    out["footfall_plan_b"] = np.clip(hod_est, 0, None).round(2)
+    out["hod_factor_profile"] = hod_profile
+    out["density_factor"] = density_factors
+    out["footfall_plan_b_per_sensor"] = np.clip(footfall_b_sensor, 0, None).round(2)
+    out["footfall_plan_b"] = np.clip(footfall_b_dedup, 0, None).round(2)
+    out["footfall_plan_b_profile_hod"] = np.clip(footfall_profile, 0, None).round(2)
     return out
 
 

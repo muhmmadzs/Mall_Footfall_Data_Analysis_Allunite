@@ -16,7 +16,12 @@ from src.calibration import (
     hourly_sensor_features,
     leave_one_out_cv,
     mall_daily_dedup,
+    mall_hour_primary_facility_counts,
     mall_hourly_visitors,
+)
+from src.hod_v2 import (
+    calibration_validation_hod_v2,
+    tune_hod_v2_params,
 )
 from src.cleaning import build_quality_mask
 from src.paths import CALIBRATED_FACILITIES
@@ -93,7 +98,19 @@ def run_task1_plan_b(
     clean_sessions = sessions.loc[build_quality_mask(sessions)]
     profile = hour_of_day_profile(clean_sessions)
     neighbor_map = assign_facility_neighbors(facilities)
+    hod_params, hod_loo_mae, hod_tune_grid = tune_hod_v2_params(
+        cal_total, neighbor_map, profile, capture_rates_per_facility
+    )
+    cap_map = dict(zip(capture_rates["facility_num"], capture_rates["mean_capture_rate"]))
+    hod_calibration_val = calibration_validation_hod_v2(
+        cal_total, cap_map, neighbor_map, profile, hod_params
+    )
+
     hourly = hourly_sensor_features(sessions)
+    dedup_counts = mall_hour_primary_facility_counts(sessions)
+    hourly = hourly.merge(dedup_counts, on=["facility_num", "hour_start"], how="left")
+    hourly["clean_unique_devices_dedup"] = hourly["clean_unique_devices_dedup"].fillna(0)
+    hourly["trusted_unique_devices_dedup"] = hourly["trusted_unique_devices_dedup"].fillna(0)
     hourly = apply_plan_b_estimates(
         hourly,
         cal_total,
@@ -101,6 +118,7 @@ def run_task1_plan_b(
         profile,
         global_trusted,
         neighbor_map,
+        hod_params=hod_params,
     )
 
     mean_capture = float(
@@ -124,6 +142,14 @@ def run_task1_plan_b(
 
     meta = {
         "primary_method_plan_b": "footfall_plan_b",
+        "plan_b_hod": "hod_v2 manual-anchored + shrinkage + density (LOO-tuned)",
+        "hod_v2_params": hod_params.__dict__,
+        "hod_v2_loo_mae": hod_loo_mae,
+        "hod_v2_calibration_validation": hod_calibration_val.to_dict(orient="records"),
+        "hod_v2_tune_grid_top": hod_tune_grid.head(10).to_dict(orient="records"),
+        "plan_b_device_assignment": "one primary sensor per device per hour (max signal_level)",
+        "plan_b_dedup_note": "footfall_plan_b uses clean_unique_devices_dedup; footfall_plan_b_per_sensor uses per-sensor counts",
+        "plan_b_legacy_hod_column": "hod_factor_profile / footfall_plan_b_profile_hod",
         "primary_mall_metric": "estimated_mall_visitors",
         "global_clean": global_clean.__dict__,
         "global_trusted": global_trusted.__dict__,

@@ -1,0 +1,10 @@
+map_id,asset_id,facility_num,x_frac,y_frac,label
+lower_mall,8003,66330,0.54,0.30,8003
+lower_mall,8005,66331,0.56,0.44,8005
+lower_mall,8007,66332,0.55,0.60,8007
+lower_mall,8009,66333,0.20,0.70,8009
+lower_mall,8013,66335,0.22,0.36,8013
+lower_mall,8019,66338,0.75,0.12,8019
+south_john,8015,66336,0.20,0.40,8015
+south_john,8021,66340,0.19,0.56,8021
+south_john,8023,66342,0.17,0.74,8023

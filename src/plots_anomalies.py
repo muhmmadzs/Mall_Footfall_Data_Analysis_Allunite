@@ -13,6 +13,23 @@ import seaborn as sns
 from src.paths import OUTPUT_DIR
 
 
+def _footfall_column(df: pd.DataFrame) -> str:
+    for col in ("footfall_plan_b", "estimated_total_footfall", "footfall_plan_a"):
+        if col in df.columns:
+            return col
+    raise KeyError("No footfall column in anomaly_hours")
+
+
+def _anomaly_mask(df: pd.DataFrame) -> pd.Series:
+    if "is_anomaly_hour" in df.columns:
+        return df["is_anomaly_hour"].astype(bool)
+    if "is_anomaly_consensus" in df.columns:
+        return df["is_anomaly_consensus"].astype(bool)
+    if "is_anomaly_hod" in df.columns:
+        return df["is_anomaly_hod"].astype(bool)
+    return pd.Series(False, index=df.index)
+
+
 def plot_flag_rates(flag_summary: Dict[str, float], path: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 4))
     labels = ["is_excluded", "is_fake", "is_anomaly", "flagged_any"]
@@ -145,9 +162,11 @@ def plot_hourly_footfall_with_anomalies(
     path: Path,
     top_n_facilities: int = 4,
 ) -> None:
+    footfall_col = _footfall_column(anomaly_hours)
+    anomaly_mask = _anomaly_mask(anomaly_hours)
     lookup = facilities.set_index("facility_num")["facility_name"].to_dict()
     top_facilities = (
-        anomaly_hours.groupby("facility_num")["estimated_total_footfall"]
+        anomaly_hours.groupby("facility_num")[footfall_col]
         .mean()
         .sort_values(ascending=False)
         .head(top_n_facilities)
@@ -161,16 +180,16 @@ def plot_hourly_footfall_with_anomalies(
         )
         ax.plot(
             grp["hour_start"],
-            grp["estimated_total_footfall"],
+            grp[footfall_col],
             color="steelblue",
             linewidth=1,
             alpha=0.8,
         )
-        peaks = grp.loc[grp["is_anomaly_hour"]]
+        peaks = grp.loc[anomaly_mask.reindex(grp.index, fill_value=False)]
         if len(peaks):
             ax.scatter(
                 peaks["hour_start"],
-                peaks["estimated_total_footfall"],
+                peaks[footfall_col],
                 color="crimson",
                 s=35,
                 zorder=5,

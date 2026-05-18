@@ -1,0 +1,226 @@
+{
+  "primary_method_plan_b": "footfall_plan_b",
+  "plan_b_hod": "hod_v2 manual-anchored + shrinkage + density (LOO-tuned)",
+  "hod_v2_params": {
+    "shrink_tau": 2.0,
+    "smooth_tau": 2.0,
+    "density_beta": 0.15,
+    "profile_alpha": 0.0,
+    "hod_min": 0.5,
+    "hod_max": 1.25,
+    "density_clip_min": 0.85,
+    "density_clip_max": 1.15
+  },
+  "hod_v2_loo_mae": 347.189891098917,
+  "hod_v2_calibration_validation": [
+    {
+      "facility_num": 66330,
+      "started": "2026-04-23 13:00:00+00:00",
+      "hour_of_day": 13,
+      "manual_total_count": 651.0,
+      "predicted_plan_b_v2": 698.0,
+      "abs_error": 47.0,
+      "pct_error": 7.22
+    },
+    {
+      "facility_num": 66330,
+      "started": "2026-04-24 13:00:00+00:00",
+      "hour_of_day": 13,
+      "manual_total_count": 550.0,
+      "predicted_plan_b_v2": 467.5,
+      "abs_error": 82.5,
+      "pct_error": 15.0
+    },
+    {
+      "facility_num": 66333,
+      "started": "2026-04-23 15:00:00+00:00",
+      "hour_of_day": 15,
+      "manual_total_count": 565.0,
+      "predicted_plan_b_v2": 171.65,
+      "abs_error": 393.35,
+      "pct_error": 69.62
+    },
+    {
+      "facility_num": 66333,
+      "started": "2026-04-24 15:00:00+00:00",
+      "hour_of_day": 15,
+      "manual_total_count": 558.0,
+      "predicted_plan_b_v2": 474.3,
+      "abs_error": 83.7,
+      "pct_error": 15.0
+    }
+  ],
+  "hod_v2_tune_grid_top": [
+    {
+      "shrink_tau": 3.0,
+      "smooth_tau": 4.0,
+      "density_beta": 0.2,
+      "profile_alpha": 0.2,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 3.0,
+      "density_beta": 0.2,
+      "profile_alpha": 0.0,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 3.0,
+      "density_beta": 0.15,
+      "profile_alpha": 0.2,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 3.0,
+      "density_beta": 0.15,
+      "profile_alpha": 0.15,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 3.0,
+      "density_beta": 0.15,
+      "profile_alpha": 0.0,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 2.0,
+      "density_beta": 0.2,
+      "profile_alpha": 0.2,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 2.0,
+      "density_beta": 0.2,
+      "profile_alpha": 0.15,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 2.0,
+      "density_beta": 0.2,
+      "profile_alpha": 0.0,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 2.0,
+      "density_beta": 0.15,
+      "profile_alpha": 0.2,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    },
+    {
+      "shrink_tau": 4.0,
+      "smooth_tau": 2.0,
+      "density_beta": 0.15,
+      "profile_alpha": 0.15,
+      "hod_min": 0.5,
+      "hod_max": 1.25,
+      "density_clip_min": 0.85,
+      "density_clip_max": 1.15,
+      "loo_mae": 347.189891098917
+    }
+  ],
+  "plan_b_device_assignment": "one primary sensor per device per hour (max signal_level)",
+  "plan_b_dedup_note": "footfall_plan_b uses clean_unique_devices_dedup; footfall_plan_b_per_sensor uses per-sensor counts",
+  "plan_b_legacy_hod_column": "hod_factor_profile / footfall_plan_b_profile_hod",
+  "primary_mall_metric": "estimated_mall_visitors",
+  "global_clean": {
+    "name": "global_linear_clean_unique_devices",
+    "feature": "clean_unique_devices",
+    "intercept": 532.5947188693715,
+    "slope": 0.01552819989754704,
+    "mae": 24.62030336570092,
+    "mape": 0.042474044037796144,
+    "r2": 0.530108351723602,
+    "per_facility": false
+  },
+  "global_trusted": {
+    "name": "global_linear_trusted_unique_devices",
+    "feature": "trusted_unique_devices",
+    "intercept": 516.9755907556479,
+    "slope": 2.3495196052973246,
+    "mae": 17.014541677486335,
+    "mape": 0.029670876338133256,
+    "r2": 0.7996709821219614,
+    "per_facility": false
+  },
+  "bootstrap_clean": {
+    "intercept_mean": 526.7604504575078,
+    "intercept_p05": 345.1534446764092,
+    "intercept_p95": 568.9700690713737,
+    "slope_mean": 0.013620727488515946,
+    "slope_p05": -0.005372217958557176,
+    "slope_p95": 0.05271398747390396
+  },
+  "neighbor_map": {
+    "66330": 66330,
+    "66333": 66333,
+    "66331": 66330,
+    "66332": 66333,
+    "66335": 66333,
+    "66336": 66333,
+    "66338": 66330,
+    "66340": 66333,
+    "66342": 66333,
+    "66328": 66333
+  },
+  "mean_mall_capture_rate": 0.18638222792525463,
+  "calibrated_facilities": [
+    66330,
+    66333
+  ],
+  "capture_rates": [
+    {
+      "facility_num": 66330,
+      "capture_rate": 0.1268681997422934,
+      "neighbor_facility": 66330
+    },
+    {
+      "facility_num": 66333,
+      "capture_rate": 0.5189040965171188,
+      "neighbor_facility": 66333
+    }
+  ]
+}

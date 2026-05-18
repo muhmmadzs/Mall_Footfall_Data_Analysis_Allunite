@@ -224,6 +224,7 @@ def generate_all_facility_plots(
     footfall_col: str = "estimated_total_footfall",
     plan_label: str = "Plan",
     hourly_plan_a: Optional[pd.DataFrame] = None,
+    per_facility_charts: bool = False,
 ) -> None:
     """Write grid + heatmap + per-facility PNGs for all sensors."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -254,13 +255,14 @@ def generate_all_facility_plots(
         facilities,
         output_dir / f"{label}_all_facilities_hourly_devices.png",
     )
-    _save_individual_facility_charts(
-        hourly,
-        facilities,
-        output_dir / "by_facility",
-        value_col=footfall_col,
-        prefix=label,
-    )
+    if per_facility_charts:
+        _save_individual_facility_charts(
+            hourly,
+            facilities,
+            output_dir / "by_facility",
+            value_col=footfall_col,
+            prefix=label,
+        )
 
     if hourly_plan_a is not None and not hourly_plan_a.empty:
         plot_plan_a_vs_b_facilities(
