@@ -20,14 +20,17 @@ HOURS = list(range(24))
 
 @dataclass
 class HodV2Params:
-    shrink_tau: float = 4.0
-    smooth_tau: float = 3.0
+    """Tuned defaults: strong manual fit at calibration hours + stable weekly totals."""
+
+    shrink_tau: float = 2.0
+    smooth_tau: float = 1.5
     density_beta: float = 0.15
     profile_alpha: float = 0.2
-    hod_min: float = 0.5
-    hod_max: float = 1.25
+    hod_min: float = 0.4
+    hod_max: float = 1.5
     density_clip_min: float = 0.85
     density_clip_max: float = 1.15
+    capture_global_scale: float = 1.0
 
 
 def circular_hour_distance(h1: int, h2: int) -> float:
@@ -242,41 +245,90 @@ def loo_mae_hod_v2(
         train = cal_df.drop(index=cal_df.index[i])
         test = cal_df.iloc[i]
         cap_rates = capture_rates_fn(train)
+        if params.capture_global_scale != 1.0:
+            cap_rates = cap_rates.copy()
+            cap_rates["mean_capture_rate"] = (
+                cap_rates["mean_capture_rate"] * params.capture_global_scale
+            )
         cap_map = dict(zip(cap_rates["facility_num"], cap_rates["mean_capture_rate"]))
         pred = predict_calibration_row(test, train, cap_map, prof, neighbor_map, params)
         errors.append(abs(pred - float(test["manual_total_count"])))
     return float(np.mean(errors)) if errors else float("inf")
 
 
+def _calibration_fit_score(
+    cal_df: pd.DataFrame,
+    cap_map: Dict[int, float],
+    neighbor_map: Dict[int, int],
+    profile: pd.DataFrame,
+    params: HodV2Params,
+    capture_rates_fn,
+) -> Tuple[float, float, float]:
+    """Return (in_sample_mae, max_pct_error, loo_mae)."""
+    val = calibration_validation_hod_v2(cal_df, cap_map, neighbor_map, profile, params)
+    insample_mae = float(val["abs_error"].mean()) if len(val) else float("inf")
+    max_pct = float(val["pct_error"].max()) if len(val) else float("inf")
+    loo = loo_mae_hod_v2(cal_df, neighbor_map, profile, params, capture_rates_fn)
+    return insample_mae, max_pct, loo
+
+
 def tune_hod_v2_params(
     cal_df: pd.DataFrame,
     neighbor_map: Dict[int, int],
     profile: pd.DataFrame,
-    capture_rates_fn,
+    capture_rates_fn=None,
+    *,
+    quick: bool = False,
 ) -> Tuple[HodV2Params, float, pd.DataFrame]:
-    """Leave-one-out grid search on manual calibration windows."""
+    """Grid search: calibration MAE + worst-window error + LOO (for generalization)."""
+    if capture_rates_fn is None:
+        from src.calibration import capture_rates_per_facility as capture_rates_fn
+    shrink_grid = (2.0, 4.0, 6.0) if quick else (1.5, 2.0, 3.0, 4.0, 6.0)
+    smooth_grid = (1.5, 2.0, 3.0) if quick else (1.5, 2.0, 3.0, 4.0)
+    hod_max_grid = (1.5, 2.0, 2.5) if quick else (1.25, 1.5, 1.75, 2.0, 2.5)
     rows: List[Dict[str, Any]] = []
-    best_mae = float("inf")
+    best_score = float("inf")
     best = HodV2Params()
-    for shrink_tau in (2.0, 3.0, 4.0, 6.0):
-        for smooth_tau in (2.0, 3.0, 4.0):
-            for density_beta in (0.0, 0.1, 0.15, 0.2):
-                for profile_alpha in (0.0, 0.15, 0.2):
-                    p = HodV2Params(
-                        shrink_tau=shrink_tau,
-                        smooth_tau=smooth_tau,
-                        density_beta=density_beta,
-                        profile_alpha=profile_alpha,
-                    )
-                    mae = loo_mae_hod_v2(
-                        cal_df, neighbor_map, profile, p, capture_rates_fn
-                    )
-                    rows.append({**asdict(p), "loo_mae": mae})
-                    if mae < best_mae:
-                        best_mae = mae
-                        best = p
-    grid = pd.DataFrame(rows).sort_values("loo_mae")
-    return best, best_mae, grid
+    best_loo = float("inf")
+
+    for shrink_tau in shrink_grid:
+        for smooth_tau in smooth_grid:
+            for density_beta in (0.0, 0.1, 0.15) if quick else (0.0, 0.05, 0.1, 0.15, 0.2):
+                for profile_alpha in (0.0, 0.15, 0.2) if quick else (0.0, 0.1, 0.15, 0.2):
+                    for hod_max in hod_max_grid:
+                        for hod_min in (0.4, 0.5):
+                            for cap_scale in (1.0,) if quick else (0.95, 1.0, 1.05):
+                                p = HodV2Params(
+                                    shrink_tau=shrink_tau,
+                                    smooth_tau=smooth_tau,
+                                    density_beta=density_beta,
+                                    profile_alpha=profile_alpha,
+                                    hod_min=hod_min,
+                                    hod_max=hod_max,
+                                    capture_global_scale=cap_scale,
+                                )
+                                cap = capture_rates_fn(cal_df, "mean", cap_scale)
+                                cap_map = dict(
+                                    zip(cap["facility_num"], cap["mean_capture_rate"])
+                                )
+                                insample_mae, max_pct, loo = _calibration_fit_score(
+                                    cal_df, cap_map, neighbor_map, profile, p, capture_rates_fn
+                                )
+                                score = 0.45 * insample_mae + 0.25 * max_pct + 0.30 * loo
+                                row = {
+                                    **asdict(p),
+                                    "insample_mae": insample_mae,
+                                    "max_pct_error": max_pct,
+                                    "loo_mae": loo,
+                                    "composite_score": score,
+                                }
+                                rows.append(row)
+                                if score < best_score:
+                                    best_score = score
+                                    best_loo = loo
+                                    best = p
+    grid = pd.DataFrame(rows).sort_values("composite_score")
+    return best, best_loo, grid
 
 
 def calibration_validation_hod_v2(

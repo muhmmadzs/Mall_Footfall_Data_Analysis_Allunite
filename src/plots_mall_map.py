@@ -317,8 +317,8 @@ def generate_mall_map_plots(
     plot_task3_top_paths_on_map(
         top_paths, facilities, out / "task3_top_paths_mall_map.png"
     )
-    # Legacy path used in report
+    # Legacy filename used in report
     plot_task3_transitions_on_maps(
-        transitions, facilities, OUTPUT_DIR / "task3_sensor_map.png"
+        transitions, facilities, out / "task3_sensor_map.png"
     )
     return out

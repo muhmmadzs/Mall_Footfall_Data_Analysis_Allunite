@@ -20,6 +20,7 @@ from src.calibration import (
     mall_hourly_visitors,
 )
 from src.hod_v2 import (
+    HodV2Params,
     calibration_validation_hod_v2,
     tune_hod_v2_params,
 )
@@ -32,6 +33,7 @@ def run_task1_plan_b(
     facilities: pd.DataFrame,
     manuals: pd.DataFrame,
     overlap_rate: float = 0.0,
+    hod_params_override: Dict[str, Any] | None = None,
 ) -> Tuple[
     pd.DataFrame,
     pd.DataFrame,
@@ -91,15 +93,27 @@ def run_task1_plan_b(
 
     global_trusted = fit_global_linear(cal_total, "trusted_unique_devices")
     global_clean = fit_global_linear(cal_total, "clean_unique_devices")
-    capture_rates = capture_rates_per_facility(cal_total)
     loo = leave_one_out_cv(cal_total, "clean_unique_devices")
     bootstrap = bootstrap_coefficients(cal_total, "clean_unique_devices")
 
     clean_sessions = sessions.loc[build_quality_mask(sessions)]
     profile = hour_of_day_profile(clean_sessions)
     neighbor_map = assign_facility_neighbors(facilities)
-    hod_params, hod_loo_mae, hod_tune_grid = tune_hod_v2_params(
-        cal_total, neighbor_map, profile, capture_rates_per_facility
+    if hod_params_override:
+        fields = HodV2Params.__dataclass_fields__
+        hod_params = HodV2Params(
+            **{k: v for k, v in hod_params_override.items() if k in fields}
+        )
+        hod_loo_mae = float("nan")
+        hod_tune_grid = pd.DataFrame([hod_params.__dict__])
+    else:
+        hod_params, hod_loo_mae, hod_tune_grid = tune_hod_v2_params(
+            cal_total, neighbor_map, profile, capture_rates_per_facility, quick=True
+        )
+    capture_rates = capture_rates_per_facility(
+        cal_total,
+        method="mean",
+        global_scale=hod_params.capture_global_scale,
     )
     cap_map = dict(zip(capture_rates["facility_num"], capture_rates["mean_capture_rate"]))
     hod_calibration_val = calibration_validation_hod_v2(

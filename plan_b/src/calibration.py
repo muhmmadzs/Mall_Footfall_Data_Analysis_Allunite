@@ -173,14 +173,39 @@ def fit_blend_trusted_clean(cal_df: pd.DataFrame) -> BlendModel:
     )
 
 
-def capture_rates_per_facility(cal_df: pd.DataFrame) -> pd.DataFrame:
+def capture_rates_per_facility(
+    cal_df: pd.DataFrame,
+    method: str = "mean",
+    global_scale: float = 1.0,
+) -> pd.DataFrame:
+    """Facility capture rates from manual calibration windows."""
     df = cal_df.copy()
     df["capture_rate"] = df["manual_total_count"] / df["clean_unique_devices"].clip(lower=1)
-    return (
-        df.groupby("facility_num", as_index=False)["capture_rate"]
-        .mean()
-        .rename(columns={"capture_rate": "mean_capture_rate"})
-    )
+    if method == "latest":
+        df = df.sort_values("started").drop_duplicates("facility_num", keep="last")
+        out = df[["facility_num", "capture_rate"]].rename(columns={"capture_rate": "mean_capture_rate"})
+    elif method == "median":
+        out = (
+            df.groupby("facility_num", as_index=False)["capture_rate"]
+            .median()
+            .rename(columns={"capture_rate": "mean_capture_rate"})
+        )
+    elif method == "geo_mean":
+        out = (
+            df.groupby("facility_num")["capture_rate"]
+            .apply(lambda s: float(np.exp(np.log(s.clip(lower=1e-9)).mean())))
+            .reset_index()
+            .rename(columns={"capture_rate": "mean_capture_rate"})
+        )
+    else:
+        out = (
+            df.groupby("facility_num", as_index=False)["capture_rate"]
+            .mean()
+            .rename(columns={"capture_rate": "mean_capture_rate"})
+        )
+    if global_scale != 1.0:
+        out["mean_capture_rate"] = out["mean_capture_rate"] * float(global_scale)
+    return out
 
 
 def leave_one_out_cv(cal_df: pd.DataFrame, feature: str = "clean_unique_devices") -> pd.DataFrame:
@@ -353,9 +378,15 @@ def apply_plan_b_estimates(
 ) -> pd.DataFrame:
     """Plan B sensor-hour footfall (HOD v2) + legacy profile HOD for comparison."""
     out = hourly.copy()
-    cap_map = dict(zip(capture_rates["facility_num"], capture_rates["mean_capture_rate"]))
-    prof = profile.set_index(["facility_num", "hour_of_day"])["profile_median_devices"]
     params = hod_params or HodV2Params()
+    cap_rates = capture_rates.copy()
+    if params.capture_global_scale != 1.0:
+        cap_rates = cap_rates.copy()
+        cap_rates["mean_capture_rate"] = (
+            cap_rates["mean_capture_rate"] * params.capture_global_scale
+        )
+    cap_map = dict(zip(cap_rates["facility_num"], cap_rates["mean_capture_rate"]))
+    prof = profile.set_index(["facility_num", "hour_of_day"])["profile_median_devices"]
 
     out["footfall_plan_a"] = (
         global_trusted.intercept + global_trusted.slope * out["trusted_unique_devices"]

@@ -116,12 +116,50 @@ def run_plan_a(
     return out
 
 
+def tune_plan_b_parameters(
+    *,
+    method: str = "bayesian",
+    quick: bool = True,
+    n_calls: int = 60,
+    n_initial_points: int = 20,
+    random_state: int = 42,
+) -> Dict[str, Any]:
+    """
+    Tune Plan B HOD + capture parameters.
+
+    method: ``"bayesian"`` (Gaussian-process, default) or ``"grid"`` (exhaustive grid).
+    """
+    setup_notebook_paths()
+    with _PlanBPath():
+        from src.tune_plan_b import tune_plan_b
+
+        sessions, facilities, manuals = load_data()
+        hod_params, capture_method, history, best_eval = tune_plan_b(
+            sessions,
+            facilities,
+            manuals,
+            method=method,
+            quick=quick,
+            n_calls=n_calls,
+            n_initial_points=n_initial_points,
+            random_state=random_state,
+        )
+    return {
+        "hod_params": hod_params.__dict__,
+        "capture_method": capture_method,
+        "evaluation": best_eval,
+        "history": history,
+        "optimizer": best_eval.get("optimizer", method),
+    }
+
+
 def run_plan_b(
     *,
     force_recompute: bool = False,
     write_outputs: bool = False,
     hod_factor_min: float = HOD_FACTOR_MIN,
     hod_factor_max: float = HOD_FACTOR_MAX,
+    hod_params: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     setup_notebook_paths()
     out: Dict[str, Any] = {"plan": "B", "output_dir": PLAN_B_OUTPUT}
@@ -155,7 +193,13 @@ def run_plan_b(
         overlap = float(t2.get("multi_sensor_rate", 0.0))
 
         cal_df, models_df, loo, hourly, mall_daily, mall_hourly, capture_rates, meta = (
-            run_task1_plan_b(sessions, facilities, manuals, overlap_rate=overlap)
+            run_task1_plan_b(
+                sessions,
+                facilities,
+                manuals,
+                overlap_rate=overlap,
+                hod_params_override=hod_params,
+            )
         )
         suspicious, anomaly_hours, anomaly_summary, device_stats = run_task4_plan_b(
             sessions, hourly
@@ -624,6 +668,7 @@ def run_full_analysis(
     *,
     force_recompute: bool = True,
     write_outputs: bool = False,
+    hod_params: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Run Tasks 1–4 (Plan A + B) and advanced anomalies in one pass (in-memory by default)."""
     setup_notebook_paths()
@@ -645,7 +690,11 @@ def run_full_analysis(
         sessions=sessions,
         facilities=facilities,
     )
-    plan_b = run_plan_b(force_recompute=force_recompute, write_outputs=write_outputs)
+    plan_b = run_plan_b(
+        force_recompute=force_recompute,
+        write_outputs=write_outputs,
+        hod_params=hod_params,
+    )
     hourly_b = plan_b["hourly"]
 
     suspicious_a, anomaly_a, summary_a, dev_a = run_task4_a(sessions, hourly_a)

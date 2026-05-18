@@ -5,11 +5,14 @@
 **[mall_footfall_analysis.ipynb](mall_footfall_analysis.ipynb)** — runs the full pipeline (Tasks 1–4, Plan A + B, advanced anomalies).
 
 ```python
-from notebook_helpers import run_full_analysis, plot_full_analysis
+from notebook_helpers import tune_plan_b_parameters, run_full_analysis, plot_full_analysis
 
-results = run_full_analysis(force_recompute=True, write_outputs=False)
+tuning = tune_plan_b_parameters(method="bayesian", n_calls=50)  # Gaussian-process search
+results = run_full_analysis(force_recompute=True, hod_params=tuning["hod_params"])
 plot_full_analysis(results, save_plots=True)
 ```
+
+Install tuning dependency: `pip install scikit-optimize`
 
 - **`write_outputs=False`** (default) — keep results in memory; no CSV files under `outputs/`
 - **`save_plots=True`** — PNGs only under `outputs/plots/`
