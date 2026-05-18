@@ -1,0 +1,162 @@
+# Technical Assignment: Mall Footfall Data Analysis
+
+## Deliverables produced
+
+The full analysis is implemented in:
+
+- `run_assignment_analysis.py`
+
+Run with:
+
+```bash
+"/Users/zohaibsarwar/Assignment Folder/.venv/bin/python" "/Users/zohaibsarwar/Assignment Folder/run_assignment_analysis.py"
+```
+
+Generated outputs are in `outputs/`:
+
+- `task1_calibration_windows.csv`
+- `task1_hourly_estimated_footfall.csv`
+- `task2_sensor_overlap_pairs.csv`
+- `task3_top_journeys.csv`
+- `task3_transition_matrix.csv`
+- `task3_sample_device_journeys.csv`
+- `task4_suspicious_unflagged_devices.csv`
+- `task4_hourly_anomalies.csv`
+- `analysis_summary.json`
+
+## Data used
+
+- Session rows: **2,248,477**
+- Facility rows: **10**
+- Manual counting rows: **8** (4 one-hour windows, each with pedestrians + bicycles)
+
+## Method and findings
+
+### Task 1: Traffic model (sensor -> real visitor count)
+
+Approach:
+
+1. Built 1-hour calibration windows from manual counting timestamps (`started` to `started + 60m`).
+2. Computed candidate sensor features per window:
+   - session counts,
+   - unique devices (raw and cleaned),
+   - trusted/local unique devices.
+3. Selected the strongest feature by absolute correlation with manual totals.
+4. Fit a linear calibration model:
+
+\[
+\text{estimated\_footfall} = \text{intercept} + \text{slope} \times \text{selected\_feature}
+\]
+
+Selected model:
+
+- Feature: `trusted_unique_devices`
+- Intercept: **516.98**
+- Slope: **2.3495**
+- Calibration MAE: **17.01**
+- Calibration MAPE: **2.97%**
+- Calibration R²: **0.800**
+
+Notes:
+
+- Calibration uses only 4 windows, so uncertainty is high.
+- Model was then applied hourly across all facilities to produce `task1_hourly_estimated_footfall.csv`.
+- Estimated daily mall totals (sum over all sensor-hours):
+  - 2026-04-20: **110,340.73**
+  - 2026-04-21: **112,108.21**
+  - 2026-04-22: **113,679.91**
+  - 2026-04-23: **110,989.30**
+  - 2026-04-24: **116,607.37**
+  - 2026-04-25: **114,715.54**
+  - 2026-04-26: **117,622.50**
+
+### Task 2: Sensor intersection (multi-sensor overlap)
+
+Approach:
+
+1. Removed obviously non-traffic sessions (`is_excluded`, `is_anomaly`, `is_fake`, `is_permanent_device`).
+2. Computed unique devices per facility and pairwise overlap.
+3. Calculated:
+   - `shared_devices`
+   - Jaccard overlap
+   - overlap percentage relative to smaller side.
+
+Key findings:
+
+- Total clean unique devices: **2,042,923**
+- Devices seen by more than one sensor: **131,320** (**6.43%**)
+- Strongest overlap pair by shared devices:
+  - `66330 (GB-LVO-DD-08003)` <-> `66331 (GB-LVO-DD-08005)`
+  - Shared devices: **58,355**
+  - Jaccard: **0.1026**
+- Another strong pair:
+  - `66333 (GB-LVO-DD-08009)` <-> `66342 (GB-LVO-DD-08023)`
+  - Shared devices: **43,278**
+  - Jaccard: **0.1053**
+
+### Task 3: Journey mapping (path reconstruction)
+
+Approach:
+
+1. Kept clean sessions only.
+2. Isolated devices seen at >1 facility.
+3. Sorted each device by time.
+4. Removed consecutive repeats of the same facility to keep movement events.
+5. Built path strings and transition counts.
+
+Key findings:
+
+- Multi-facility devices with journeys: **131,320**
+- Most common path: `66330 -> 66331` (**42,826 devices**)
+- Most common transition edge:
+  - `66330 (GB-LVO-DD-08003) -> 66331 (GB-LVO-DD-08005)`
+  - **51,395 transitions**
+- Next most common edge:
+  - `66333 (GB-LVO-DD-08009) -> 66342 (GB-LVO-DD-08023)`
+  - **34,547 transitions**
+
+Note:
+
+- This deliverable reconstructs temporal journeys.
+- Once floor plan imagery is provided, transitions can be overlaid spatially for map-based visuals.
+
+### Task 4: Anomaly detection and pattern analysis
+
+Approach:
+
+1. Reviewed built-in flags (`is_excluded`, `is_anomaly`, `is_fake`).
+2. Built device-level statistics:
+   - total sessions,
+   - active days,
+   - facility spread,
+   - night activity ratio.
+3. Flagged suspicious, currently unflagged devices using strict thresholds:
+   - top 0.01% by total sessions (>= 32 sessions), or
+   - very high night ratio (>= 0.6) with at least 120 sessions.
+4. Calculated hourly z-score outliers on estimated footfall per facility.
+
+Key findings:
+
+- Existing flag rates are very low:
+  - `is_excluded`: **0.1054%**
+  - `is_fake`: **0.0027%**
+  - `is_anomaly`: **0.0000%**
+  - any flag: **0.1081%**
+- Suspicious unflagged devices identified: **87**
+- High-zscore peak examples:
+  - Facility `66330` at `2026-04-23 16:00 UTC`, estimated footfall **672.04**, z-score **4.60**
+  - Facility `66331` at `2026-04-26 17:00 UTC`, estimated footfall **627.40**, z-score **4.51**
+  - Facility `66340` at `2026-04-25 15:00 UTC`, estimated footfall **733.13**, z-score **4.31**
+
+## Assumptions and limitations
+
+- Manual counts are available for only 4 one-hour windows and 2 facilities, so model uncertainty is significant.
+- Calibration target is total manual count (pedestrians + bicycles). If footfall should be pedestrians-only, the target can be switched easily.
+- Sensor-level totals are generated by aggregating all facilities; there is no mall-entry gate-level deduplication in this assignment scope.
+
+## Next steps to strengthen production quality
+
+1. Collect more manual counting windows across days/hours/facilities.
+2. Use time-aware cross-validation and uncertainty bands.
+3. Add facility-specific calibration terms (or hierarchical model).
+4. Overlay transitions on floor plan for spatial journey analytics and dwell-zone interpretation.
