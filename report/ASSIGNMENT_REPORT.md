@@ -5,13 +5,13 @@
 ## Executive summary
 
 - Processed **2,248,477** sensor sessions across **10** facility records (9 active sensors + mall cluster row).
-- Calibrated a linear footfall model on **4** one-hour manual counting windows (2 sensors × 2 days) using **trusted unique devices** as the predictor.
-- In-sample calibration error is low (MAPE **2.97%**, R² **0.80**), but **n = 4** limits confidence when extrapolating to all sensors and hours.
+- Calibrated a **Plan C trend-preserving** footfall model on **4** one-hour manual counting windows (2 sensors × 2 days), using **clean unique devices** for hourly shape and manual counts for scale.
+- The old trusted-device linear model has lower validation error, but its large intercept flattens the hourly output; the recommended model uses elasticity **β = 0.10** with MAPE **6.04%** and leave-one-out MAPE **12.16%**.
 - **6.43%** of clean unique devices were detected at more than one sensor; strongest pairwise overlap is **66330 ↔ 66331** (58,355 shared devices).
 - Most common journey path: **66330 → 66331** (42,826 devices); dominant transition edge matches this corridor.
 - Built-in session flags are rare (**0.11%** any flag); **87** additional high-activity devices look suspicious but are not flagged.
 - Hourly footfall z-scores highlight peak anomalies (e.g. facility 66340 on 25 Apr 15:00 UTC, z ≈ 4.3).
-- Daily estimated footfall is stable (~110k–118k/day); **local MAC devices** dominate detections; week total **796k** estimated footfall vs **2.04M** clean unique devices (mall dedup).
+- Daily estimated footfall is now less flat (~91k–111k/day); **local MAC devices** dominate detections; week total **707k** estimated footfall vs **2.04M** clean unique devices (mall dedup).
 
 ## Data and cleaning
 
@@ -52,34 +52,36 @@ No manual counts exist for the other seven sensors.
 ### Method
 
 1. For each manual window, computed sensor features (raw/clean sessions, unique devices, trusted/local unique devices).
-2. Selected the feature with strongest absolute correlation to `manual_total_count`.
-3. Fit **ordinary least squares**: `footfall = intercept + slope × feature`.
-4. Applied the same feature definition at hourly granularity per facility for the full week.
+2. Compared linear, no-intercept, capture-rate, blended, and clean-device elasticity models.
+3. Kept the old trusted-device linear model as a diagnostic because it validates well but creates flat hourly totals through a large intercept.
+4. Selected **Plan C: trend-preserving clean-device elasticity** for the delivered estimate.
+5. Applied calibrated/manual anchors to hourly clean-device volume for the full week; uncalibrated sensors borrow the nearest calibrated anchor.
 
 ### Selected model
 
 | Metric | Value |
 |--------|-------|
-| Feature | `trusted_unique_devices` |
-| Intercept | 516.98 |
-| Slope | 2.3495 |
-| MAE (4 windows) | 17.01 |
-| MAPE | 2.97% |
-| R² | 0.800 |
+| Feature | `clean_unique_devices` |
+| Intercept | 0.00 |
+| Elasticity beta | 0.10 |
+| MAE (4 windows) | 35.09 |
+| MAPE | 6.04% |
+| R² | 0.240 |
+| Leave-one-out MAPE | 12.16% |
 
 ### Daily estimated mall totals (sum of facility-hours; not deduplicated visitors)
 
 | Date | Estimated footfall |
 |------|-------------------|
-| 2026-04-20 | 110,340.73 |
-| 2026-04-21 | 112,108.21 |
-| 2026-04-22 | 113,679.91 |
-| 2026-04-23 | 110,989.30 |
-| 2026-04-24 | 116,607.37 |
-| 2026-04-25 | 114,715.54 |
-| 2026-04-26 | 117,622.50 |
+| 2026-04-20 | 97,453.78 |
+| 2026-04-21 | 91,470.95 |
+| 2026-04-22 | 99,979.64 |
+| 2026-04-23 | 90,914.00 |
+| 2026-04-24 | 106,925.19 |
+| 2026-04-25 | 109,576.51 |
+| 2026-04-26 | 110,890.14 |
 
-**Outputs:** `outputs/task1_calibration_windows.csv`, `outputs/task1_hourly_estimated_footfall.csv`, `outputs/task1_calibration_scatter.png`
+**Outputs:** `outputs/task1_calibration_windows.csv`, `outputs/task1_hourly_estimated_footfall.csv`, `outputs/task1_model_comparison.csv`, `outputs/task1_leave_one_out_cv.csv`, `outputs/task1_bootstrap_selected_model.csv`, `outputs/task1_calibration_scatter.png`
 
 ---
 
@@ -193,12 +195,12 @@ Anomaly outputs: `outputs/task4_hourly_anomalies.csv`, `plan_b/outputs/task4_hou
 | Clean sessions | 2,237,846 |
 | Unique devices (mall dedup, clean) | 2,042,923 |
 | Sum of facility daily uniques | 2,209,972 (over-counts multi-sensor visits) |
-| Estimated footfall (facility-hour sum) | 796,063.56 |
+| Estimated footfall (facility-hour sum) | 707,210.21 |
 | Trusted devices (week) | 13,126 |
 | Local devices (week) | 2,038,900 |
 | Other devices (week) | 3,881 |
 
-Daily estimated footfall stayed in a narrow band (~110k–118k per day). **Local (randomised MAC) devices** dominate each day; **trusted** devices are a small fraction (~0.9% of sessions) but drive the calibration model. **Other devices** (clean, neither trusted nor local) are a small residual.
+Daily estimated footfall now moves in a wider but controlled band (~91k–111k per day). **Local (randomised MAC) devices** dominate each day; **trusted** devices are a small fraction (~0.9% of sessions) and are retained as diagnostics, while the recommended footfall shape is driven by clean unique devices. **Other devices** (clean, neither trusted nor local) are a small residual.
 
 ### Charts
 

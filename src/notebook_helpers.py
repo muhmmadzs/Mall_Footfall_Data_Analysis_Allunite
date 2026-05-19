@@ -98,20 +98,44 @@ def run_plan_a(
     path = PLAN_A_OUTPUT / "task1_hourly_estimated_footfall.csv"
     if not force_recompute and write_outputs and path.exists():
         out["hourly"] = pd.read_csv(path, parse_dates=["hour_start"])
+        model_path = PLAN_A_OUTPUT / "task1_model_comparison.csv"
+        loo_path = PLAN_A_OUTPUT / "task1_leave_one_out_cv.csv"
+        boot_path = PLAN_A_OUTPUT / "task1_bootstrap_selected_model.csv"
+        if model_path.exists():
+            out["model_comparison"] = pd.read_csv(model_path)
+        if loo_path.exists():
+            out["leave_one_out"] = pd.read_csv(loo_path, parse_dates=["started"])
+        if boot_path.exists():
+            out["bootstrap"] = pd.read_csv(boot_path)
         out["loaded_from_disk"] = True
         return out
 
-    sessions, _, manuals = load_data()
+    sessions, facilities, manuals = load_data()
     from src.task1 import run_task1
 
-    cal_df, result, hourly = run_task1(sessions, manuals)
+    cal_df, result, hourly = run_task1(sessions, manuals, facilities)
     if write_outputs:
         PLAN_A_OUTPUT.mkdir(parents=True, exist_ok=True)
         cal_df.to_csv(PLAN_A_OUTPUT / "task1_calibration_windows.csv", index=False)
         hourly.to_csv(path, index=False)
+        if not result.model_comparison.empty:
+            result.model_comparison.to_csv(
+                PLAN_A_OUTPUT / "task1_model_comparison.csv", index=False
+            )
+        if not result.leave_one_out.empty:
+            result.leave_one_out.to_csv(
+                PLAN_A_OUTPUT / "task1_leave_one_out_cv.csv", index=False
+            )
+        if not result.bootstrap.empty:
+            result.bootstrap.to_csv(
+                PLAN_A_OUTPUT / "task1_bootstrap_selected_model.csv", index=False
+            )
     out["hourly"] = hourly
     out["calibration"] = cal_df
     out["task1_result"] = result
+    out["model_comparison"] = result.model_comparison
+    out["leave_one_out"] = result.leave_one_out
+    out["bootstrap"] = result.bootstrap
     out["loaded_from_disk"] = False
     return out
 
@@ -382,7 +406,7 @@ def plot_task1(plan: str = "both") -> Dict[str, Path]:
         else:
             from src.task1 import run_task1
 
-            cal_df, _, hourly = run_task1(sessions, manuals)
+            cal_df, _, hourly = run_task1(sessions, manuals, facilities)
         from src.task2 import run_task2 as _run_task2
 
         pair_counts, summary = _run_task2(sessions, facilities)
@@ -677,7 +701,7 @@ def run_full_analysis(
     from src.task1 import run_task1
     from src.task4 import run_task4 as run_task4_a
 
-    cal_a, res_a, hourly_a = run_task1(sessions, manuals)
+    cal_a, res_a, hourly_a = run_task1(sessions, manuals, facilities)
     t2 = run_task2(
         force_recompute=force_recompute,
         write_outputs=write_outputs,
@@ -724,12 +748,32 @@ def run_full_analysis(
     if write_outputs:
         PLAN_A_OUTPUT.mkdir(parents=True, exist_ok=True)
         hourly_a.to_csv(PLAN_A_OUTPUT / "task1_hourly_estimated_footfall.csv", index=False)
+        cal_a.to_csv(PLAN_A_OUTPUT / "task1_calibration_windows.csv", index=False)
+        if not res_a.model_comparison.empty:
+            res_a.model_comparison.to_csv(
+                PLAN_A_OUTPUT / "task1_model_comparison.csv", index=False
+            )
+        if not res_a.leave_one_out.empty:
+            res_a.leave_one_out.to_csv(
+                PLAN_A_OUTPUT / "task1_leave_one_out_cv.csv", index=False
+            )
+        if not res_a.bootstrap.empty:
+            res_a.bootstrap.to_csv(
+                PLAN_A_OUTPUT / "task1_bootstrap_selected_model.csv", index=False
+            )
 
     return {
         "sessions": sessions,
         "facilities": facilities,
         "manuals": manuals,
-        "plan_a": {"hourly": hourly_a, "calibration": cal_a, "task1_result": res_a},
+        "plan_a": {
+            "hourly": hourly_a,
+            "calibration": cal_a,
+            "task1_result": res_a,
+            "model_comparison": res_a.model_comparison,
+            "leave_one_out": res_a.leave_one_out,
+            "bootstrap": res_a.bootstrap,
+        },
         "plan_b": plan_b,
         "comparison_daily": plan_b["comparison_daily"],
         "task2": t2,

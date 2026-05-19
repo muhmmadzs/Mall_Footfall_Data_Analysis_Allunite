@@ -18,7 +18,19 @@ from src.paths import OUTPUT_DIR
 def main() -> None:
     results = run_full_analysis(force_recompute=True, write_outputs=False)
     plot_full_analysis(results, save_plots=True, plan="both")
+    task1_result = results["plan_a"]["task1_result"]
     summary = {
+        "task1": {
+            "recommended_model": task1_result.model_name,
+            "selected_feature": task1_result.feature_name,
+            "intercept": task1_result.intercept,
+            "slope": task1_result.slope,
+            "in_sample_mape": task1_result.mape,
+            "in_sample_r2": task1_result.r2,
+            "leave_one_out_mape": task1_result.loo_mape,
+            "leave_one_out_max_ape": task1_result.loo_max_ape,
+            "calibration_windows": task1_result.n_calibration_windows,
+        },
         "task2": results["task2"]["summary"],
         "task3": {"journey_devices": results["task3"].get("journey_devices")},
         "task4_b": results["task4_b"]["anomaly_summary"],

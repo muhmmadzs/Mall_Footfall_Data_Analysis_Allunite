@@ -4,6 +4,8 @@
 
 **[mall_footfall_analysis.ipynb](mall_footfall_analysis.ipynb)** — runs the full pipeline (Tasks 1–4, Plan A + B, advanced anomalies).
 
+**[00_trusted_devices_eda.ipynb](00_trusted_devices_eda.ipynb)** — first-pass EDA for manual counts, `trusted_unique_devices`, candidate calibration features, and weekly trusted-device trends.
+
 ```python
 from notebook_helpers import tune_plan_b_parameters, run_full_analysis, plot_full_analysis
 
