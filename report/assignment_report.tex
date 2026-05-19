@@ -64,6 +64,7 @@
 \toprule
 Location & Liverpool One, UK \\
 Period & \periodcovered \\
+Repository & \url{https://github.com/muhmmadzs/Mall_Footfall_Data_Analysis_Allunite} \\
 \bottomrule
 \end{tabular}
 \vfill
@@ -88,14 +89,14 @@ This project converts raw mall sensor detections into a structured visitor analy
 
 The main data challenge is that raw device detections are not real visitor counts. Some phones are seen repeatedly, some devices are fixed or noisy, and many modern devices use randomized/local MAC addresses. The analysis therefore uses a clean-traffic mask that excludes records flagged as excluded, anomalous, fake, or permanent-device traffic, while retaining zero-duration sessions because the assignment states that these are valid momentary detections.
 
-Task 1 is the most important modelling problem. Initial trusted-device EDA showed that trusted devices correlate with manual counts, but trusted counts are extremely sparse: only 11--52 trusted devices appear in manual windows where the true manual count is roughly 550--651 people. A simple trusted-device linear model therefore learns a large intercept and fits the four calibration windows well, but that intercept flattens hourly and weekly variation when applied to the full dataset. Clean/local devices preserve the temporal shape better, but can overshoot if used as a direct capture-rate model. The selected delivery estimate, Plan C, is a compromise: it anchors to manual counts while preserving the clean-device trend shape through a low-elasticity model.
+Task 1 is the most important modelling problem. Initial trusted-device EDA showed that trusted devices correlate with manual counts, but trusted counts are extremely sparse: only 11--52 trusted devices appear in manual windows where the true manual count is roughly 550--651 people. A simple trusted-device linear model therefore learns a large intercept and fits the four calibration windows well, but that intercept flattens hourly and weekly variation when applied to the full dataset. Clean/local devices preserve the temporal shape better, but can overshoot if used as a direct capture-rate model. The selected delivery estimate, Plan C, is a compromise: it anchors to manual counts while preserving the clean-device trend shape through a low-elasticity model. Plan C was selected because it balances manual count calibration with realistic hourly and daily traffic variation. I did not use complex black-box models as the primary estimator because only four manual calibration windows were available, which would make such models unstable and difficult to validate.
 
 Overall results and assumptions:
 \begin{itemize}
   \item The dataset contains 2,248,477 sensor sessions across 10 facility records, of which 9 are active sensor locations plus the mall-level cluster row.
   \item The clean modelling mask keeps valid visitor-like traffic and excludes flagged, fake, anomalous, and permanent-device sessions. Locally administered MAC addresses are retained as likely visitor traffic but treated cautiously for cross-session identity.
   \item Task 1 uses four one-hour manual counting windows at two calibrated sensors. The selected delivery model is Plan C, with mean absolute percentage error (MAPE) of 6.04\% on the calibration windows and leave-one-out MAPE of 12.16\%.
-  \item The Plan C weekly facility-hour footfall estimate is approximately 707,210. This is not the same as deduplicated mall visitors; Plan B provides an additional mall-level deduplicated visitor estimate.
+  \item The Plan C weekly facility-hour footfall estimate is approximately 707,210. This is not the same as deduplicated mall visitors: facility-hour footfall can count the same person at multiple sensors, while mall-level visitors require cross-sensor deduplication. Plan B provides an additional mall-level deduplicated visitor estimate.
   \item 131,320 clean devices, or 6.43\%, are seen at more than one sensor. The strongest overlap pair is facility 66330 with 66331, with 58,355 shared devices.
   \item The most common sessionized journey remains the corridor 66330 to 66331. Journeys are split when the same device has more than a 60-minute gap.
   \item Existing data-quality flags are rare: approximately 0.11\% of sessions have any built-in flag. Additional suspicious unflagged devices are identified from extreme session counts or night-heavy activity.
@@ -541,6 +542,11 @@ Advanced methods provide comparative signals:
 \section{Reproducibility}
 
 \subsection{Environment Setup}
+
+Repository:
+\[
+\text{\url{https://github.com/muhmmadzs/Mall_Footfall_Data_Analysis_Allunite}}
+\]
 
 \begin{verbatim}
 python3 -m venv .venv
