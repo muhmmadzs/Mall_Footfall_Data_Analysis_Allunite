@@ -57,6 +57,16 @@ No manual counts exist for the other seven sensors.
 4. Selected **Plan C: trend-preserving clean-device elasticity** for the delivered estimate.
 5. Applied calibrated/manual anchors to hourly clean-device volume for the full week; uncalibrated sensors borrow the nearest calibrated anchor.
 
+### Model naming and selection rationale
+
+| Label | Output column | Role |
+|-------|---------------|------|
+| Plan A | `footfall_plan_a` / `footfall_trusted_linear` | Trusted-device linear baseline; useful diagnostic but flatter over time. |
+| Plan B | `footfall_plan_b` | Capture-rate + hour-of-day/density comparison model; also produces mall-deduped visitors. |
+| Plan C | `footfall_plan_c` / `estimated_total_footfall` | Delivered Task 1 estimate; trend-preserving clean-device elasticity. |
+
+Plan A has the lowest error on the four calibration windows, but that fit relies on a large intercept and compresses hourly/daily variation. Plan C is selected for delivery because it keeps the hourly shape tied to clean unique device volume while staying anchored to manual counts. With only four manual windows, this is a judgement call: the reported error metrics should be read together with the trend-shape plots and the limitations below.
+
 ### Selected model
 
 | Metric | Value |
@@ -92,6 +102,7 @@ No manual counts exist for the other seven sensors.
 - Reduced clean data to unique `(device_id, facility_num)` pairs.
 - Counted devices seen at **>1** facility.
 - For each sensor pair (A < B): shared devices, Jaccard index, overlap % of smaller side.
+- Added same-day shared-device counts to separate broad weekly overlap from more time-local movement evidence.
 
 ### Findings
 
@@ -115,15 +126,16 @@ High overlap reflects pedestrian movement and adjacent coverage, not necessarily
 ### Method
 
 1. Devices with **>1** distinct facility on clean data.
-2. Sorted sessions by time; collapsed consecutive duplicate facilities.
-3. Built path strings and `facility → next_facility` transition counts.
+2. Sorted sessions by time and split journeys when the same device had a gap of more than **60 minutes**.
+3. Collapsed consecutive duplicate facilities within each journey session.
+4. Built path strings and `facility → next_facility` transition counts.
 
 ### Findings
 
 | Metric | Value |
 |--------|-------|
 | Devices with multi-facility paths | 131,320 |
-| Most common path | `66330 -> 66331` (**42,826** devices) |
+| Most common path | `66330 -> 66331` (see `outputs/task3_top_journeys.csv` for sessionized journey and device counts) |
 | Top transition | 66330 → 66331 (**51,395** transitions) |
 
 Sensor GPS map saved for spatial context; floor-plan overlay can be added when a raster image is exported from the provided PPTX.
@@ -153,6 +165,14 @@ Flagged if **not** permanent/flagged and either:
 
 - Top **0.01%** by session count (≥ **32** sessions), or
 - Night ratio ≥ **0.6** with ≥ **120** sessions.
+
+Threshold rationale:
+
+| Rule | Threshold | Why used |
+|------|-----------|----------|
+| Long-tail device activity | Top 0.01% by session count | Catches extreme repeated detections unlikely to be ordinary visitors. |
+| Night-heavy devices | Night ratio ≥ 0.60 and sessions ≥ 120 | Catches always-on/background devices active outside normal mall movement. |
+| Hourly footfall outliers | Facility-level \|z\| ≥ 3 | Standard high-confidence outlier rule within each sensor's weekly pattern. |
 
 **Result:** **87** suspicious devices identified.
 

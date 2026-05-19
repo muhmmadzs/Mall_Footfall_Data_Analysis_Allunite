@@ -4,6 +4,11 @@ from typing import Dict
 
 import pandas as pd
 
+SUSPICIOUS_SESSION_QUANTILE = 0.9999
+SUSPICIOUS_NIGHT_RATIO_MIN = 0.60
+SUSPICIOUS_NIGHT_SESSION_MIN = 120
+HOURLY_FOOTFALL_Z_THRESHOLD = 3.0
+
 
 def build_device_stats(sessions: pd.DataFrame) -> pd.DataFrame:
     """Per-device behaviour metrics for anomaly pattern analysis."""
@@ -39,7 +44,7 @@ def run_task4(
     flag_summary["flagged_any"] = float(sessions["flagged_any"].mean())
 
     device_stats = build_device_stats(sessions)
-    threshold = float(device_stats["total_sessions"].quantile(0.9999))
+    threshold = float(device_stats["total_sessions"].quantile(SUSPICIOUS_SESSION_QUANTILE))
 
     suspicious = device_stats.loc[
         (~device_stats["permanent_device"])
@@ -47,8 +52,8 @@ def run_task4(
         & (
             (device_stats["total_sessions"] >= threshold)
             | (
-                (device_stats["night_session_ratio"] >= 0.6)
-                & (device_stats["total_sessions"] >= 120)
+                (device_stats["night_session_ratio"] >= SUSPICIOUS_NIGHT_RATIO_MIN)
+                & (device_stats["total_sessions"] >= SUSPICIOUS_NIGHT_SESSION_MIN)
             )
         )
     ].sort_values(["total_sessions", "night_session_ratio"], ascending=[False, False])
@@ -57,11 +62,20 @@ def run_task4(
     anomaly_hours["zscore"] = anomaly_hours.groupby("facility_num")[
         "estimated_total_footfall"
     ].transform(lambda s: (s - s.mean()) / (s.std(ddof=0) if s.std(ddof=0) > 0 else 1))
-    anomaly_hours["is_anomaly_hour"] = anomaly_hours["zscore"].abs() >= 3
+    anomaly_hours["is_anomaly_hour"] = anomaly_hours["zscore"].abs() >= HOURLY_FOOTFALL_Z_THRESHOLD
     anomaly_hours = anomaly_hours.sort_values("zscore", ascending=False)
 
     summary = {
-        "high_session_threshold_top_0_1pct": threshold,
+        "high_session_threshold_quantile": SUSPICIOUS_SESSION_QUANTILE,
+        "high_session_threshold": threshold,
+        "night_ratio_threshold": SUSPICIOUS_NIGHT_RATIO_MIN,
+        "night_session_minimum": SUSPICIOUS_NIGHT_SESSION_MIN,
+        "hourly_footfall_z_threshold": HOURLY_FOOTFALL_Z_THRESHOLD,
+        "threshold_rationale": (
+            "Suspicious devices are unflagged/non-permanent outliers in total sessions "
+            "or heavily night-active devices; hourly footfall anomalies use |z| >= 3 "
+            "within each facility."
+        ),
         "suspicious_unflagged_devices": int(len(suspicious)),
         **flag_summary,
     }

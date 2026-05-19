@@ -13,10 +13,11 @@ from src.paths import PLOTS_DIR
 
 
 def plot_top_journeys(top_paths: pd.DataFrame, path: Path, n: int = 15) -> None:
-    top = top_paths.nlargest(n, "device_count").copy()
+    count_col = "journey_count" if "journey_count" in top_paths.columns else "device_count"
+    top = top_paths.nlargest(n, count_col).copy()
     fig, ax = plt.subplots(figsize=(10, max(5, 0.4 * len(top))))
-    ax.barh(top["path"], top["device_count"], color="#16a085")
-    ax.set_xlabel("Unique devices")
+    ax.barh(top["path"], top[count_col], color="#16a085")
+    ax.set_xlabel("Journey sessions" if count_col == "journey_count" else "Unique devices")
     ax.set_title(f"Top {n} multi-sensor journey paths")
     ax.invert_yaxis()
     plt.tight_layout()
@@ -77,9 +78,9 @@ def plot_journey_length_distribution(
     fig, ax = plt.subplots(figsize=(8, 4))
     vals = sample_paths["unique_facilities"].clip(upper=12)
     ax.hist(vals, bins=range(2, int(vals.max()) + 2), color="#8e44ad", edgecolor="white")
-    ax.set_xlabel("Unique facilities visited per device")
-    ax.set_ylabel("Devices")
-    ax.set_title("Journey breadth (multi-sensor devices)")
+    ax.set_xlabel("Unique facilities visited per journey session")
+    ax.set_ylabel("Journey sessions")
+    ax.set_title("Journey breadth (sessionized multi-sensor paths)")
     plt.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)

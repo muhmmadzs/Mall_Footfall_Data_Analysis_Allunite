@@ -10,7 +10,37 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Place data files under `data/` (session CSV is copied there on first setup).
+By default, place the three input files under `data/`:
+
+```text
+data/
+  allunite_device_session.csv
+  facility_information - Sheet1.csv
+  Manual Counting - Sheet1.csv
+```
+
+You can also point the code at another folder with environment variables:
+
+```bash
+export MALL_FOOTFALL_DATA_DIR="/path/to/my/data"
+python run_analysis.py
+```
+
+Or override individual files:
+
+```bash
+export MALL_FOOTFALL_SESSION_CSV="/path/to/allunite_device_session.csv"
+export MALL_FOOTFALL_FACILITY_CSV="/path/to/facility_information - Sheet1.csv"
+export MALL_FOOTFALL_MANUAL_CSV="/path/to/Manual Counting - Sheet1.csv"
+python run_analysis.py
+```
+
+Optional output overrides:
+
+```bash
+export MALL_FOOTFALL_OUTPUT_DIR="/path/to/outputs"
+export MALL_FOOTFALL_PLAN_B_OUTPUT_DIR="/path/to/plan_b_outputs"
+```
 
 ## Run analysis
 

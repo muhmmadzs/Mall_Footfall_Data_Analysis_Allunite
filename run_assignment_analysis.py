@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
@@ -13,12 +14,29 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error,
 from statsmodels.tsa.seasonal import STL
 
 
-SESSION_CSV = Path("/Users/zohaibsarwar/Downloads/allunite_device_session.csv")
-FACILITY_CSV = Path("/Users/zohaibsarwar/Downloads/facility_information - Sheet1.csv")
-MANUAL_CSV = Path("/Users/zohaibsarwar/Downloads/Manual Counting - Sheet1.csv")
+PROJECT_ROOT = Path(__file__).resolve().parent
 
-WORKSPACE_ROOT = Path("/Users/zohaibsarwar/Assignment Folder")
-OUTPUT_DIR = WORKSPACE_ROOT / "outputs"
+
+def _path_from_env(name: str, default: Path) -> Path:
+    value = os.getenv(name)
+    return Path(value).expanduser().resolve() if value else default
+
+
+DATA_DIR = _path_from_env("MALL_FOOTFALL_DATA_DIR", PROJECT_ROOT / "data")
+SESSION_CSV = _path_from_env(
+    "MALL_FOOTFALL_SESSION_CSV",
+    DATA_DIR / "allunite_device_session.csv",
+)
+FACILITY_CSV = _path_from_env(
+    "MALL_FOOTFALL_FACILITY_CSV",
+    DATA_DIR / "facility_information - Sheet1.csv",
+)
+MANUAL_CSV = _path_from_env(
+    "MALL_FOOTFALL_MANUAL_CSV",
+    DATA_DIR / "Manual Counting - Sheet1.csv",
+)
+
+OUTPUT_DIR = _path_from_env("MALL_FOOTFALL_OUTPUT_DIR", PROJECT_ROOT / "outputs")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

@@ -277,11 +277,15 @@ def plot_task3_top_paths_on_map(
     _draw_sensor_nodes(ax, layout, "lower_mall", w, h)
 
     lines = []
-    top = top_paths.nlargest(n, "device_count")
+    count_col = "journey_count" if "journey_count" in top_paths.columns else "device_count"
+    count_label = "journeys" if count_col == "journey_count" else "devices"
+    top = top_paths.nlargest(n, count_col)
     for i, row in enumerate(top.itertuples(index=False)):
         parts = [p.strip() for p in str(row.path).split("->")]
         assets = [fac_to_asset.get(int(p), p) for p in parts if p.strip().isdigit()]
-        lines.append(f"{i + 1}. {' → '.join(assets)}  ({int(row.device_count):,} devices)")
+        lines.append(
+            f"{i + 1}. {' → '.join(assets)}  ({int(getattr(row, count_col)):,} {count_label})"
+        )
 
     ax.set_title("Task 3 — Top journey paths (lower-mall sensors)", fontsize=11)
     fig.text(

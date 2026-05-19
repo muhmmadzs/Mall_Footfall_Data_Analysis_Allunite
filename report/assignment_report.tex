@@ -1,0 +1,613 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{amsmath,amssymb}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.45em}
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.12}
+\emergencystretch=3em
+\captionsetup{font=small,labelfont=bf}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  citecolor=blue!50!black
+}
+
+\newcommand{\projecttitle}{Mall Footfall Data Analysis}
+\newcommand{\periodcovered}{20--26 April 2026}
+\newcommand{\mallid}{66328}
+\newcommand{\qualitymask}{\ensuremath{\neg\text{\texttt{is\_excluded}}\wedge\neg\text{\texttt{is\_anomaly}}\wedge\neg\text{\texttt{is\_fake}}\wedge\neg\text{\texttt{is\_permanent\_device}}}}
+
+\newcommand{\maybeincludegraphics}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{\fbox{\parbox{0.92\linewidth}{Missing figure: \texttt{#2}}}}%
+}
+\newcommand{\reportfigure}[3][0.84\linewidth]{%
+  \begin{figure}[!htbp]
+  \centering
+  \maybeincludegraphics[width=#1]{#2}
+  \caption{#3}
+  \end{figure}
+}
+\newcommand{\fileentry}[1]{\path{#1}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2.0cm}
+{\Huge\bfseries \projecttitle\par}
+\vspace{0.6cm}
+{\Large Technical Assignment Report\par}
+\vspace{1.2cm}
+{\large Sensor-based footfall modelling and visitor behaviour analysis\par}
+\vspace{2.0cm}
+\begin{tabular}{rl}
+\toprule
+Location & Liverpool One, UK \\
+Period & \periodcovered \\
+Mall ID & \mallid \\
+Primary estimate & Plan C trend-preserving footfall \\
+\bottomrule
+\end{tabular}
+\vfill
+{\large Generated from the reproducible project pipeline\par}
+\vspace*{1.0cm}
+\end{titlepage}
+
+\begin{abstract}
+This report analyses one week of Wi-Fi/Bluetooth sensor detections from a shopping mall in Liverpool, UK. The assignment asks for four linked analyses: a calibrated traffic model, sensor intersection analysis, journey reconstruction, and anomaly/pattern detection. The work processes 2,248,477 raw sensor sessions, calibrates sensor detections against four one-hour manual counting windows, estimates weekly footfall, quantifies cross-sensor overlap, reconstructs sessionized visitor paths, and identifies suspicious devices and anomalous footfall hours. The delivered Task 1 estimate is Plan C, a trend-preserving clean-device elasticity model calibrated to manual counts.
+\end{abstract}
+
+\section*{AI Assistance Disclosure}
+Parts of this report were written with the help of ChatGPT for language clarification, structure, formatting, and time saving. The analysis, code outputs, assumptions, calculations, figures, and final interpretation were reviewed and assembled from the project notebooks, Python pipeline, generated CSV outputs, and plots.
+
+\tableofcontents
+\listoffigures
+\newpage
+
+\section{Executive Summary}
+
+This project converts raw mall sensor detections into a structured visitor analytics workflow. It starts with 2,248,477 Wi-Fi/Bluetooth detection sessions from Liverpool One during 20--26 April 2026, combines them with sensor metadata and four one-hour manual counting windows, and then answers the four assignment tasks: calibrated footfall estimation, multi-sensor overlap, journey reconstruction, and anomaly detection.
+
+The main data challenge is that raw device detections are not real visitor counts. Some phones are seen repeatedly, some devices are fixed or noisy, and many modern devices use randomized/local MAC addresses. The analysis therefore uses a clean-traffic mask that excludes records flagged as excluded, anomalous, fake, or permanent-device traffic, while retaining zero-duration sessions because the assignment states that these are valid momentary detections.
+
+Task 1 is the most important modelling problem. Initial trusted-device EDA showed that trusted devices correlate with manual counts, but trusted counts are extremely sparse: only 11--52 trusted devices appear in manual windows where the true manual count is roughly 550--651 people. A simple trusted-device linear model therefore learns a large intercept and fits the four calibration windows well, but that intercept flattens hourly and weekly variation when applied to the full dataset. Clean/local devices preserve the temporal shape better, but can overshoot if used as a direct capture-rate model. The selected delivery estimate, Plan C, is a compromise: it anchors to manual counts while preserving the clean-device trend shape through a low-elasticity model.
+
+Overall results and assumptions:
+\begin{itemize}
+  \item The dataset contains 2,248,477 sensor sessions across 10 facility records, of which 9 are active sensor locations plus the mall-level cluster row.
+  \item The clean modelling mask keeps valid visitor-like traffic and excludes flagged, fake, anomalous, and permanent-device sessions. Locally administered MAC addresses are retained as likely visitor traffic but treated cautiously for cross-session identity.
+  \item Task 1 uses four one-hour manual counting windows at two calibrated sensors. The selected delivery model is Plan C, with mean absolute percentage error (MAPE) of 6.04\% on the calibration windows and leave-one-out MAPE of 12.16\%.
+  \item The Plan C weekly facility-hour footfall estimate is approximately 707,210. This is not the same as deduplicated mall visitors; Plan B provides an additional mall-level deduplicated visitor estimate.
+  \item 131,320 clean devices, or 6.43\%, are seen at more than one sensor. The strongest overlap pair is facility 66330 with 66331, with 58,355 shared devices.
+  \item The most common sessionized journey remains the corridor 66330 to 66331. Journeys are split when the same device has more than a 60-minute gap.
+  \item Existing data-quality flags are rare: approximately 0.11\% of sessions have any built-in flag. Additional suspicious unflagged devices are identified from extreme session counts or night-heavy activity.
+\end{itemize}
+
+The headline interpretation is that the pipeline produces a credible, reproducible first-pass mall footfall analysis, but the calibration is limited by only four manual count windows. Results should therefore be read as a carefully documented estimate rather than a fully validated production model. The strongest improvement path is to collect more manual counts across more sensors and times of day, then refit the model with facility-specific or hierarchical uncertainty.
+
+\section{Assignment Requirements}
+
+The assignment provides three input datasets:
+\begin{enumerate}
+  \item \textbf{Raw sensor sessions}: one row per detected device session, including \texttt{session\_start}, \texttt{device\_id}, \texttt{facility\_num}, \texttt{session\_duration}, \texttt{signal\_level}, and quality flags.
+  \item \textbf{Facility metadata}: one row per sensor/facility, including \texttt{facility\_num}, names, GPS coordinates, and sensor box MACs.
+  \item \textbf{Manual counts}: eight rows representing pedestrian and bicycle counts during four 60-minute windows at two sensor locations.
+\end{enumerate}
+
+The four required tasks are:
+\begin{description}
+  \item[Task 1] Build a model that converts raw sensor data into estimated real visitor counts, calibrated to manual counts.
+  \item[Task 2] Quantify how many devices are seen by multiple sensors and which sensors overlap.
+  \item[Task 3] Reconstruct visitor paths through the mall from devices seen at multiple sensors.
+  \item[Task 4] Identify anomalous or suspicious behaviour and evaluate existing flags.
+\end{description}
+
+\section{Data Exploration}
+
+\subsection{Trusted-Device EDA Motivation}
+
+The first exploratory notebook, \texttt{notebooks/00\_trusted\_devices\_eda.ipynb}, was used as a modelling checkpoint before building the final task pipelines. Its main finding was that \texttt{trusted\_unique\_devices} is attractive as a calibration signal, but risky as the only driver of weekly footfall.
+
+The reason is visible in the manual windows: the manual counts are in the hundreds, but the trusted-device counts are only in the tens. A simple trusted-device regression can fit four calibration points with a large intercept, but that intercept then dominates low-volume hours and removes much of the real hourly/weekly trend. Clean and local unique devices are much larger and preserve the traffic shape better, but they can overshoot if used with a naive capture rate. This trade-off is the central challenge in Task 1.
+
+\begin{table}[!htbp]
+\centering
+\caption{Manual windows from the EDA notebook: real counts versus detected devices.}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Facility/time & Manual count & Clean unique & Trusted unique & Local unique \\
+\midrule
+66330, 2026-04-23 13:00 & 651 & 5,802 & 52 & 5,784 \\
+66330, 2026-04-24 13:00 & 550 & 3,886 & 18 & 3,872 \\
+66333, 2026-04-23 15:00 & 565 & 739 & 11 & 731 \\
+66333, 2026-04-24 15:00 & 558 & 2,042 & 28 & 2,021 \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{table}
+
+In these four windows, trusted-device counts have strong directional correlation with manual counts, but they are sparse. The fitted trusted-device model is:
+\[
+  \widehat{y} = 516.98 + 2.35 \cdot x_{\text{trusted}}.
+\]
+The intercept alone is close to the true manual count level. This explains the strong in-sample calibration and also why the model tends to flatten time-of-day variation when applied to all hours.
+
+\subsection{Data Volume and Coverage}
+
+\begin{table}[!htbp]
+\centering
+\caption{Core data exploration summary.}
+\begin{tabular}{lr}
+\toprule
+Metric & Value \\
+\midrule
+Raw sensor sessions & 2,248,477 \\
+Clean sessions & 2,237,846 \\
+Clean unique devices, mall deduplicated & 2,042,923 \\
+Facility records & 10 \\
+Active sensor locations used for analysis & 9 \\
+Manual counting windows & 4 one-hour windows \\
+Study period & 20--26 April 2026 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The manual counts cover two facilities:
+\begin{table}[!htbp]
+\centering
+\caption{Manual counting coverage.}
+\begin{tabular}{lll}
+\toprule
+Facility & Facility name & Manual count windows \\
+\midrule
+66330 & GB-LVO-DD-08003 & 2026-04-23 13:00; 2026-04-24 13:00 \\
+66333 & GB-LVO-DD-08009 & 2026-04-23 15:00; 2026-04-24 15:00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Daily Device and Footfall Trends}
+
+\begin{table}[!htbp]
+\centering
+\caption{Daily device and Plan C footfall summary.}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Date & Sessions & Clean sessions & Clean unique devices & Trusted devices & Local devices & Estimated footfall \\
+\midrule
+2026-04-20 & 271,917 & 270,265 & 252,782 & 1,834 & 252,052 & 110,340.73 \\
+2026-04-21 & 171,204 & 169,714 & 155,877 & 1,438 & 155,024 & 112,108.21 \\
+2026-04-22 & 278,095 & 276,625 & 255,219 & 1,932 & 254,476 & 113,679.91 \\
+2026-04-23 & 251,989 & 250,575 & 235,150 & 2,122 & 234,399 & 110,989.30 \\
+2026-04-24 & 339,854 & 338,396 & 313,237 & 2,457 & 312,406 & 116,607.37 \\
+2026-04-25 & 511,032 & 509,503 & 465,724 & 2,688 & 464,969 & 114,715.54 \\
+2026-04-26 & 424,386 & 422,768 & 382,113 & 2,283 & 381,549 & 117,622.50 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\reportfigure{../outputs/plots/task1/plan_a/footfall_daily_sessions_and_devices.png}{Daily sessions and mall-deduplicated unique devices.}
+
+\reportfigure{../outputs/plots/task1/plan_a/footfall_daily_device_types_stacked.png}{Daily trusted, local, and other device mix. Local randomized MAC devices dominate the detection volume.}
+
+\clearpage
+
+\section{Preprocessing and Assumptions}
+
+\subsection{Timestamp and Session Handling}
+
+All timestamps are interpreted as UTC. The \texttt{session\_start} field is parsed as a timezone-aware timestamp, then hourly and daily keys are derived:
+\[
+  h_i = \lfloor t_i \rfloor_{\text{hour}}, \qquad d_i = \operatorname{date}(t_i).
+\]
+The assignment states that \texttt{session\_duration = 0} is valid. Therefore zero-duration sessions are retained and treated as momentary detections rather than removed.
+
+\subsection{Clean Traffic Mask}
+
+The primary clean traffic mask is:
+\[
+  \text{clean}_i = \qualitymask.
+\]
+This removes known excluded, anomalous, fake, and permanent devices. It does not remove locally administered MAC addresses, because those are common visitor devices even though they are less stable across sessions.
+
+\subsection{Manual Count Target}
+
+Each manual count window contains pedestrian and bicycle categories. The calibration target is:
+\[
+  y_w = \operatorname{count}_{w,\text{pedestrians}} + \operatorname{count}_{w,\text{bicycles}}.
+\]
+This matches the assignment goal of estimating total passing traffic rather than pedestrians only.
+
+\subsection{Important Assumptions}
+
+\begin{itemize}
+  \item Four manual calibration windows are insufficient for a fully general facility-specific model. Uncertainty is therefore high for uncalibrated sensors.
+  \item Facility-hour footfall sums can double count the same person across sensors. Mall-level visitor estimates should use deduplication logic.
+  \item Randomized MAC addresses reduce reliable device identity across time and facilities. This affects journey and overlap analysis.
+  \item Manual counts are assumed accurate and representative of their exact 60-minute windows.
+\end{itemize}
+
+\section{Task 1: Traffic Model}
+
+\subsection{Feature Construction}
+
+For each manual window and each sensor-hour, features are computed from raw and clean sessions:
+\begin{align*}
+  x^{\text{raw uniq}} &= |\{device\_id\}|,\\
+  x^{\text{clean uniq}} &= |\{device\_id: \text{clean}\}|,\\
+  x^{\text{trusted uniq}} &= |\{device\_id: \text{clean} \wedge \texttt{is\_trusted}\}|.
+\end{align*}
+Additional diagnostics include raw sessions, clean sessions, local unique devices, mean signal level, median session duration, zero-duration ratio, and trusted/local share of clean devices.
+
+\subsection{Candidate Models}
+
+\paragraph{Linear model.}
+For a single feature \(x\), a linear model is:
+\[
+  \hat{y}_i = \alpha + \beta x_i.
+\]
+This is used for trusted, clean, local, raw unique devices and session-count features. A no-intercept variant is also tested for diagnostic purposes.
+
+\paragraph{Capture-rate model.}
+A capture-rate model estimates a scalar rate:
+\[
+  r = \operatorname{median}_i\left(\frac{y_i}{x_i}\right)
+  \quad\text{or}\quad
+  r = \operatorname{mean}_i\left(\frac{y_i}{x_i}\right),
+\]
+then predicts:
+\[
+  \hat{y} = r x.
+\]
+
+\paragraph{Plan C trend-preserving elasticity.}
+Plan C is designed to preserve the hourly and daily shape from clean unique devices while anchoring scale to manual counts. For facility \(f\), let \(a_f\) be the manual-count anchor and \(c_f\) the clean-device anchor. For an hour with clean unique device count \(c_{f,t}\):
+\[
+  \hat{y}^{C}_{f,t}
+  =
+  a_f \left(\frac{c_{f,t}}{\max(c_f,1)}\right)^{\gamma},
+  \qquad \gamma = 0.10.
+\]
+If a facility has no manual count, it borrows a nearest calibrated anchor or falls back to global calibration statistics.
+
+\paragraph{Plan B capture, HOD, and density logic.}
+Plan B was developed as a comparison model to address two practical problems: cross-sensor double counting and hour-of-day effects. First, each clean device is assigned to one primary sensor per clock hour using the strongest signal level. Let this deduplicated count be \(d_{f,t}\). A facility capture rate is estimated from the manual windows:
+\[
+  r_f = \operatorname{mean}_{w\in f}\left(\frac{y_w}{c_w}\right),
+\]
+with uncalibrated facilities borrowing the nearest calibrated facility rate. Plan B then applies hour-of-day and density corrections:
+\[
+  \hat{y}^{B}_{f,t} = d_{f,t} \cdot r_f \cdot h_{f,\operatorname{hour}(t)} \cdot q_{f,t},
+\]
+where \(h_{f,\operatorname{hour}(t)}\) is a smoothed/manual-anchored hour-of-day factor and \(q_{f,t}\) is a bounded density factor. Plan B is valuable for comparison and mall visitor estimation, but in this dataset it can overshoot or undershoot calibration windows because only two facilities have manual anchors.
+
+\subsection{Validation Metrics}
+
+For calibration windows \(i=1,\dots,n\):
+\[
+  \operatorname{MAE} = \frac{1}{n}\sum_i |y_i-\hat{y}_i|,
+  \qquad
+  \operatorname{MAPE} = \frac{1}{n}\sum_i \frac{|y_i-\hat{y}_i|}{\max(y_i,1)}.
+\]
+The coefficient of determination is:
+\[
+  R^2 = 1 - \frac{\sum_i (y_i-\hat{y}_i)^2}{\sum_i (y_i-\bar{y})^2}.
+\]
+Leave-one-out validation trains on three manual windows and predicts the held-out fourth window, repeated for all four windows.
+
+\subsection{Model Comparison and Selected Estimate}
+
+\begin{table}[!htbp]
+\centering
+\caption{Selected Task 1 model comparison.}
+\begin{tabular}{lrrrr}
+\toprule
+Model & MAE & MAPE & LOO MAPE & Role \\
+\midrule
+Trusted-device linear & 17.01 & 2.97\% & 8.18\% & Plan A baseline \\
+Clean-device linear & 24.62 & 4.25\% & 9.96\% & Diagnostic \\
+Plan C, beta 0.10 & 35.09 & 6.04\% & 12.16\% & Delivered estimate \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The trusted-device linear model has the lowest calibration-window error, but it uses a large intercept and compresses hourly variation. This is the same issue found in the EDA notebook: when trusted devices are sparse, the model learns a baseline of about 517 people before considering the observed devices. The opposite problem appears in simple clean-device/capture-rate models: they preserve volume and trend, but can overshoot because clean/local devices are numerous and include repeated or partial detections. Plan C is selected for delivery because the assignment requires an estimated footfall model across the full week, not only a good fit to four calibration points. Plan C keeps the temporal shape driven by clean unique devices while preserving manual-count scale.
+
+\reportfigure{../outputs/plots/task1/plan_a/plan_c_daily_comparison.png}{Daily Plan C estimate compared against trusted-linear and capture-rate diagnostics.}
+
+\reportfigure{../outputs/plots/task1/plan_a/plan_c_calibration_windows.png}{Manual calibration windows versus Plan C and diagnostic model predictions.}
+
+\reportfigure{../outputs/plots/task1/plan_a/footfall_weekly_totals.png}{Weekly totals and deduplication context.}
+
+\reportfigure{../outputs/plots/task1/plan_b/daily_plan_a_vs_b.png}{Plan A versus Plan B daily comparison, including mall visitor context where available.}
+
+\reportfigure{../outputs/plots/task1/plan_a/plan_a_all_facilities_daily_footfall_bars.png}{Daily facility-level footfall counts from the dashboard-style Task 1 output.}
+
+\subsection{Dashboard Views Included in the Task 1 Notebook}
+
+The Task 1 notebook also provides an interactive dashboard for reviewing the three model variants. The following static figures reproduce those dashboard views for this report: daily mall-level footfall and visitors, weekly footfall by location, daily footfall by location, calibration windows, and hourly mall visitors.
+
+\reportfigure{../outputs/plots/task1/report_dashboard/dashboard_daily_mall_footfall_abc.png}{Dashboard view: daily mall footfall for Plan A, Plan B, and Plan C, with deduplicated mall visitors shown as bars.}
+
+\reportfigure{../outputs/plots/task1/report_dashboard/dashboard_weekly_footfall_by_location_abc.png}{Dashboard view: weekly footfall by location for Plan A, Plan B, and Plan C.}
+
+\reportfigure{../outputs/plots/task1/report_dashboard/dashboard_daily_footfall_by_location_abc_heatmaps.png}{Dashboard view: daily footfall by location for all three plans. This is the static equivalent of the notebook's location dropdown.}
+
+\reportfigure{../outputs/plots/task1/report_dashboard/dashboard_manual_calibration_abc.png}{Dashboard view: manual calibration windows compared with Plan A, Plan B, and Plan C predictions.}
+
+\reportfigure{../outputs/plots/task1/report_dashboard/dashboard_hourly_mall_visitors.png}{Dashboard view: hourly estimated mall visitors from the Plan B deduplicated mall metric.}
+
+\clearpage
+
+\section{Task 2: Sensor Intersection}
+
+\subsection{Method}
+
+Task 2 asks how many devices were seen by multiple sensors. The clean dataset is reduced to unique device-sensor pairs:
+\[
+  D = \{(u,f): u \text{ is a clean device observed at facility } f\}.
+\]
+For a pair of facilities \(a,b\), the shared device count is:
+\[
+  S_{ab} = |\{u:(u,a)\in D \wedge (u,b)\in D\}|.
+\]
+The Jaccard overlap is:
+\[
+  J_{ab} = \frac{S_{ab}}{|U_a \cup U_b|},
+\]
+where \(U_a\) and \(U_b\) are the sets of devices seen at each facility. The smaller-side overlap is:
+\[
+  O_{ab} = \frac{S_{ab}}{\min(|U_a|,|U_b|)}.
+\]
+In addition, same-day shared devices are computed to distinguish broad weekly overlap from more time-local movement evidence.
+
+\subsection{Results}
+
+\paragraph{Interpretation.}
+The overlap results should be interpreted as coverage and movement evidence, not as exact double-counted visitors. A high weekly overlap means the same hashed device appeared at both sensors at least once during the week. Same-day overlap is more suggestive of actual mall movement, while Jaccard overlap normalizes for sensor volume. The strongest pair, 66330--66331, is therefore a credible high-movement corridor rather than merely a statistical artefact.
+
+\begin{table}[!htbp]
+\centering
+\caption{Top sensor overlaps.}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llrrrr}
+\toprule
+Facility A & Facility B & Shared devices & Jaccard & Smaller-side overlap & Interpretation \\
+\midrule
+66330 & 66331 & 58,355 & 0.103 & 27.48\% & Strong adjacent/corridor overlap \\
+66333 & 66342 & 43,278 & 0.105 & 35.63\% & Strong path/coverage relationship \\
+66340 & 66342 & 8,926 & 0.013 & 2.68\% & Weaker but visible overlap \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\reportfigure{../outputs/plots/task2/top_sensor_pairs.png}{Top shared-device sensor pairs.}
+
+\reportfigure[0.78\linewidth]{../outputs/plots/task2/jaccard_overlap_heatmap.png}{Jaccard overlap heatmap between sensors.}
+
+\reportfigure{../outputs/plots/task2/overlap_mall_map.png}{Sensor overlap visualised on the mall map.}
+
+\section{Task 3: Journey Mapping}
+
+\subsection{Method}
+
+Task 3 reconstructs paths for devices observed at more than one facility. Events are sorted by:
+\[
+  (device\_id, session\_start).
+\]
+To avoid joining unrelated visits over several hours or days, a journey session is split whenever the same device has a gap greater than 60 minutes:
+\[
+  \Delta t_i = t_i - t_{i-1}, \qquad
+  \text{new journey if } \Delta t_i > 60 \text{ minutes}.
+\]
+Within a journey session, consecutive duplicate facilities are collapsed. The resulting path for journey \(j\) is:
+\[
+  P_j = (f_{j,1}, f_{j,2}, \ldots, f_{j,k}).
+\]
+Directed transitions are counted as:
+\[
+  T_{ab} = \sum_j \sum_{r=1}^{k_j-1} \mathbf{1}(f_{j,r}=a, f_{j,r+1}=b).
+\]
+
+\subsection{Results}
+
+\paragraph{Interpretation.}
+The journey results are consistent with Task 2: the dominant ordered movement is 66330 to 66331. This is a short path and is plausible for adjacent or corridor-linked sensors. The 60-minute gap rule prevents a device seen hours apart from being treated as one continuous visit, so the reported paths are closer to visitor sessions than to raw week-long device histories.
+
+The dominant path is the short corridor 66330 to 66331. This agrees with the Task 2 overlap results and suggests that the same physical mall movement is visible in both pairwise overlap and ordered transition analysis.
+
+\reportfigure{../outputs/plots/task3/top_journey_paths.png}{Most common sessionized multi-sensor journey paths.}
+
+\reportfigure[0.78\linewidth]{../outputs/plots/task3/transition_heatmap.png}{Directed facility-to-facility transition heatmap.}
+
+\reportfigure{../outputs/plots/task3/transitions_mall_map.png}{Top transitions displayed on the mall floor plan.}
+
+\clearpage
+
+\section{Task 4: Anomaly Detection and Pattern Analysis}
+
+\subsection{Existing Flags}
+
+The built-in flags are rare: approximately 0.105\% of sessions are excluded, 0.003\% are fake, and 0.108\% have any built-in flag. This means most suspicious behaviour must be found from patterns rather than relying only on existing flags.
+
+\paragraph{Interpretation.}
+Task 4 should not be read as a definitive fraud detector. It is a prioritization layer: built-in flags identify a very small subset of obvious cases, while pattern-based checks find devices or hours that deserve review. The Plan C z-score highlights unusual footfall levels under the selected traffic model, and Plan B/HOD methods provide a second view that controls more explicitly for time-of-day effects.
+
+\reportfigure[0.72\linewidth]{../outputs/plots/task4/task4_flag_rates.png}{Built-in flag rates.}
+
+\subsection{Suspicious Devices}
+
+For each device, the analysis computes:
+\[
+  \text{total sessions},\quad
+  \text{unique facilities},\quad
+  \text{active days},\quad
+  \text{night ratio}
+  =
+  \frac{\text{sessions in hours 0--5}}{\text{total sessions}}.
+\]
+A device is flagged as suspicious if it is not already flagged/permanent and either:
+\begin{enumerate}
+  \item it lies in the top 0.01\% by total session count, or
+  \item its night-session ratio is at least 0.60 and it has at least 120 sessions.
+\end{enumerate}
+This identifies 87 suspicious unflagged devices.
+
+\reportfigure{../outputs/plots/task4/task4_device_session_distribution.png}{Long-tail distribution of per-device session counts.}
+
+\reportfigure{../outputs/plots/task4/task4_suspicious_device_patterns.png}{Suspicious-device patterns using session count and night ratio.}
+
+\subsection{Hourly Footfall Anomalies}
+
+Plan C is the selected Task 1 estimate, so the baseline anomaly score uses Plan C-compatible \texttt{estimated\_total\_footfall}. For facility \(f\), the z-score for hour \(t\) is:
+\[
+  z_{f,t} = \frac{y_{f,t} - \mu_f}{\sigma_f}.
+\]
+Hours with:
+\[
+  |z_{f,t}| \geq 3
+\]
+are flagged as high-confidence facility-level footfall outliers.
+
+\reportfigure{../outputs/plots/task4/task4_hourly_footfall_anomalies.png}{Hourly Plan C footfall anomalies.}
+
+\reportfigure{../outputs/plots/task4/task4_anomaly_zscore_heatmap.png}{Hourly footfall z-score heatmap by facility and time.}
+
+\subsection{Advanced Anomaly Methods}
+
+Advanced methods provide comparative signals:
+\begin{itemize}
+  \item \textbf{Robust z-score}: replaces mean and standard deviation with median and median absolute deviation (MAD),
+  \[
+    z^{\text{robust}} = \frac{|x-\operatorname{median}(x)|}{1.4826\operatorname{MAD}(x)}.
+  \]
+  \item \textbf{STL residual}: decomposes hourly footfall into trend, seasonal, and residual terms:
+  \[
+    y_t = T_t + S_t + R_t.
+  \]
+  Large residuals indicate unusual deviations from the daily pattern.
+  \item \textbf{Matrix profile}: scores subsequences whose shape is far from all other same-facility subsequences.
+  \item \textbf{Isolation Forest}: flags multivariate unusual hours using traffic volume, device counts, signal, and footfall features.
+  \item \textbf{Markov journeys}: identifies rare transitions or journey endings relative to observed transition probabilities.
+\end{itemize}
+
+\reportfigure{../outputs/plots/task4/task4_advanced_method_counts_plan_a_vs_b.png}{Advanced anomaly method counts comparing the root Plan C-compatible output and Plan B.}
+
+\clearpage
+
+\section{Limitations and Risks}
+
+\begin{enumerate}
+  \item \textbf{Limited manual calibration}: only four calibration windows exist, and only two sensors have manual observations.
+  \item \textbf{Randomized MAC addresses}: local MAC addresses dominate the data, reducing cross-session identity reliability.
+  \item \textbf{Facility-hour sums}: summing facility-hour footfall is not the same as deduplicated mall visitors.
+  \item \textbf{Short observation period}: one week of data limits seasonal conclusions and anomaly baselines.
+  \item \textbf{Journey ambiguity}: detected sensor order does not guarantee the exact physical route through the mall.
+  \item \textbf{Plan selection judgement}: Plan A fits four calibration points better, but Plan C is selected for more realistic temporal shape.
+\end{enumerate}
+
+\section{Potential Improvement Path}
+
+\begin{itemize}
+  \item Collect more manual count windows across more sensors, times of day, and days of week.
+  \item Build hierarchical or facility-specific calibration models with uncertainty intervals.
+  \item Validate suspicious devices against known staff, maintenance, or permanent-device lists.
+  \item Compare multiple journey session-gap thresholds, e.g. 30, 60, and 120 minutes.
+  \item Add uncertainty bands to footfall and mall visitor estimates.
+\end{itemize}
+
+\appendix
+\section{Reproducibility}
+
+\subsection{Environment Setup}
+
+\begin{verbatim}
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+\end{verbatim}
+
+\subsection{Configurable Data Paths}
+
+The default input location is the project \texttt{data/} folder:
+\begin{verbatim}
+data/allunite_device_session.csv
+data/facility_information - Sheet1.csv
+data/Manual Counting - Sheet1.csv
+\end{verbatim}
+
+For reproducibility on another machine or with a similar dataset, the same code can be run without editing source files by setting environment variables:
+\begin{verbatim}
+export MALL_FOOTFALL_DATA_DIR="/path/to/data"
+python run_analysis.py
+\end{verbatim}
+
+Individual files can also be overridden:
+\begin{verbatim}
+export MALL_FOOTFALL_SESSION_CSV="/path/to/allunite_device_session.csv"
+export MALL_FOOTFALL_FACILITY_CSV="/path/to/facility_information - Sheet1.csv"
+export MALL_FOOTFALL_MANUAL_CSV="/path/to/Manual Counting - Sheet1.csv"
+\end{verbatim}
+
+Output locations are also configurable:
+\begin{verbatim}
+export MALL_FOOTFALL_OUTPUT_DIR="/path/to/outputs"
+export MALL_FOOTFALL_PLAN_B_OUTPUT_DIR="/path/to/plan_b_outputs"
+\end{verbatim}
+
+\subsection{Run the Full Analysis}
+
+\begin{verbatim}
+python run_analysis.py
+\end{verbatim}
+
+This writes outputs under \texttt{outputs/} and plots under \texttt{outputs/plots/}. The per-task notebooks are:
+\begin{itemize}
+  \item \texttt{notebooks/task1\_footfall\_calibration.ipynb}
+  \item \texttt{notebooks/task2\_sensor\_overlap.ipynb}
+  \item \texttt{notebooks/task3\_journey\_paths.ipynb}
+  \item \texttt{notebooks/task4\_anomalies.ipynb}
+\end{itemize}
+
+\subsection{Important Output Files}
+
+\small
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.50\linewidth}>{\raggedright\arraybackslash}p{0.40\linewidth}}
+\toprule
+File & Description \\
+\midrule
+\endhead
+\fileentry{outputs/task1_calibration_windows.csv} & Manual windows with sensor features and predictions. \\
+\fileentry{outputs/task1_hourly_estimated_footfall.csv} & Hourly Task 1 predictions including Plan C. \\
+\fileentry{outputs/task1_model_comparison.csv} & Candidate model comparison and validation metrics. \\
+\fileentry{outputs/task2_sensor_overlap_pairs.csv} & Pairwise sensor overlap metrics. \\
+\fileentry{outputs/task3_top_journeys.csv} & Sessionized top journey paths. \\
+\fileentry{outputs/task3_transition_matrix.csv} & Directed transition counts between facilities. \\
+\fileentry{outputs/task4_suspicious_unflagged_devices.csv} & Suspicious unflagged device shortlist. \\
+\fileentry{outputs/task4_hourly_anomalies.csv} & Plan C-compatible hourly anomaly results. \\
+\bottomrule
+\end{longtable}
+\normalsize
+
+\end{document}

@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -343,6 +344,213 @@ def plot_footfall_dashboard_interactive(
     return _dash(comp, hourly, mall_hourly, facilities)
 
 
+def prepare_task1_abc(plan_a: Dict[str, Any], plan_b: Dict[str, Any]) -> Dict[str, Any]:
+    """Build unified Plan A/B/C tables for Task 1 dashboards."""
+    hourly = plan_a["hourly"].copy()
+    hourly_b = plan_b["hourly"].copy()
+    cal = plan_a["calibration"].copy()
+
+    hourly["hour_start"] = pd.to_datetime(hourly["hour_start"], utc=True).dt.tz_localize(None)
+    hourly_b["hour_start"] = pd.to_datetime(hourly_b["hour_start"], utc=True).dt.tz_localize(None)
+    cal["started"] = pd.to_datetime(cal["started"], utc=True).dt.tz_localize(None)
+
+    hourly["date"] = hourly["hour_start"].dt.date
+    hourly_b["date"] = hourly_b["hour_start"].dt.date
+
+    dashboard_hourly = hourly[[
+        "facility_num",
+        "hour_start",
+        "date",
+        "footfall_trusted_linear",
+        "footfall_plan_c",
+    ]].merge(
+        hourly_b[["facility_num", "hour_start", "footfall_plan_b"]],
+        on=["facility_num", "hour_start"],
+        how="left",
+    ).rename(columns={
+        "footfall_trusted_linear": "plan_a_estimate",
+        "footfall_plan_b": "plan_b_estimate",
+        "footfall_plan_c": "plan_c_estimate",
+    })
+
+    daily_compare = (
+        dashboard_hourly.groupby("date", as_index=False)[
+            ["plan_a_estimate", "plan_b_estimate", "plan_c_estimate"]
+        ]
+        .sum()
+        .sort_values("date")
+    )
+
+    daily_long = daily_compare.rename(columns={
+        "plan_a_estimate": "Plan A",
+        "plan_b_estimate": "Plan B",
+        "plan_c_estimate": "Plan C",
+    }).melt(
+        id_vars="date",
+        value_vars=["Plan A", "Plan B", "Plan C"],
+        var_name="plan",
+        value_name="daily_footfall",
+    )
+
+    facility_weekly = (
+        dashboard_hourly.groupby("facility_num", as_index=False)[
+            ["plan_a_estimate", "plan_b_estimate", "plan_c_estimate"]
+        ]
+        .sum()
+        .sort_values("plan_c_estimate", ascending=False)
+    )
+
+    facility_weekly_long = facility_weekly.rename(columns={
+        "plan_a_estimate": "Plan A",
+        "plan_b_estimate": "Plan B",
+        "plan_c_estimate": "Plan C",
+    }).melt(
+        id_vars="facility_num",
+        value_vars=["Plan A", "Plan B", "Plan C"],
+        var_name="plan",
+        value_name="weekly_footfall",
+    )
+
+    location_daily = (
+        dashboard_hourly.groupby(["date", "facility_num"], as_index=False)[
+            ["plan_a_estimate", "plan_b_estimate", "plan_c_estimate"]
+        ]
+        .sum()
+        .sort_values(["facility_num", "date"])
+    )
+
+    location_daily_long = location_daily.rename(columns={
+        "plan_a_estimate": "Plan A",
+        "plan_b_estimate": "Plan B",
+        "plan_c_estimate": "Plan C",
+    }).melt(
+        id_vars=["date", "facility_num"],
+        value_vars=["Plan A", "Plan B", "Plan C"],
+        var_name="plan",
+        value_name="daily_footfall",
+    )
+
+    plan_b_calibration = pd.DataFrame(plan_b.get("meta", {}).get("hod_v2_calibration_validation", []))
+    if plan_b_calibration.empty:
+        hod_path = PLAN_B_OUTPUT / "hod_v2_calibration_validation.csv"
+        if hod_path.exists():
+            plan_b_calibration = pd.read_csv(hod_path)
+    if not plan_b_calibration.empty:
+        plan_b_calibration["started"] = pd.to_datetime(
+            plan_b_calibration["started"], utc=True
+        ).dt.tz_localize(None)
+
+    calibration_compare = cal[[
+        "facility_num",
+        "started",
+        "manual_total_count",
+        "pred_linear_trusted_unique_devices",
+        "pred_plan_c_trend_preserving",
+    ]].rename(columns={
+        "pred_linear_trusted_unique_devices": "plan_a_pred",
+        "pred_plan_c_trend_preserving": "plan_c_pred",
+    })
+
+    if not plan_b_calibration.empty:
+        calibration_compare = calibration_compare.merge(
+            plan_b_calibration[["facility_num", "started", "predicted_plan_b_v2"]],
+            on=["facility_num", "started"],
+            how="left",
+        ).rename(columns={"predicted_plan_b_v2": "plan_b_pred"})
+    else:
+        calibration_compare["plan_b_pred"] = np.nan
+
+    calibration_compare["window_label"] = (
+        calibration_compare["facility_num"].astype(str)
+        + " | "
+        + calibration_compare["started"].dt.strftime("%Y-%m-%d %H:%M")
+    )
+
+    calibration_long = calibration_compare.rename(columns={
+        "manual_total_count": "Manual actual",
+        "plan_a_pred": "Plan A",
+        "plan_b_pred": "Plan B",
+        "plan_c_pred": "Plan C",
+    }).melt(
+        id_vars="window_label",
+        value_vars=["Manual actual", "Plan A", "Plan B", "Plan C"],
+        var_name="series",
+        value_name="count",
+    )
+
+    mall_daily = plan_b.get("mall_daily", pd.DataFrame())
+    mall_hourly = plan_b.get("mall_hourly", pd.DataFrame())
+
+    overall_summary = pd.DataFrame([
+        {
+            "plan": "Plan A",
+            "weekly_footfall": daily_compare["plan_a_estimate"].sum(),
+            "daily_average": daily_compare["plan_a_estimate"].mean(),
+        },
+        {
+            "plan": "Plan B",
+            "weekly_footfall": daily_compare["plan_b_estimate"].sum(),
+            "daily_average": daily_compare["plan_b_estimate"].mean(),
+        },
+        {
+            "plan": "Plan C",
+            "weekly_footfall": daily_compare["plan_c_estimate"].sum(),
+            "daily_average": daily_compare["plan_c_estimate"].mean(),
+        },
+    ])
+
+    mall_visitors_weekly = np.nan
+    if not mall_daily.empty and "estimated_mall_visitors" in mall_daily.columns:
+        mall_visitors_weekly = float(mall_daily["estimated_mall_visitors"].sum())
+
+    return {
+        "dashboard_hourly": dashboard_hourly,
+        "daily_compare": daily_compare,
+        "daily_long": daily_long,
+        "facility_weekly": facility_weekly,
+        "facility_weekly_long": facility_weekly_long,
+        "location_daily": location_daily,
+        "location_daily_long": location_daily_long,
+        "calibration_compare": calibration_compare,
+        "calibration_long": calibration_long,
+        "mall_daily": mall_daily,
+        "mall_hourly": mall_hourly,
+        "overall_summary": overall_summary,
+        "mall_visitors_weekly": mall_visitors_weekly,
+        "task1_result": plan_a.get("task1_result"),
+        "model_comparison": plan_a.get("model_comparison", pd.DataFrame()),
+    }
+
+
+def plot_task1_abc_interactive(
+    task1_abc: Optional[Dict[str, Any]] = None,
+    *,
+    plan_a: Optional[Dict[str, Any]] = None,
+    plan_b: Optional[Dict[str, Any]] = None,
+    facilities: Optional[pd.DataFrame] = None,
+):
+    """Interactive Task 1 charts for Plan A, Plan B, and Plan C."""
+    plot_abc = _import_repo_src("plots_comparison").plot_task1_abc_dashboard
+
+    if task1_abc is None:
+        if plan_a is None or plan_b is None:
+            raise ValueError("Provide task1_abc or both plan_a and plan_b")
+        task1_abc = prepare_task1_abc(plan_a, plan_b)
+
+    if facilities is None:
+        facilities = load_facilities()
+
+    return plot_abc(
+        task1_abc["daily_long"],
+        task1_abc["facility_weekly_long"],
+        task1_abc["location_daily_long"],
+        task1_abc["calibration_long"],
+        mall_daily=task1_abc.get("mall_daily"),
+        mall_hourly=task1_abc.get("mall_hourly"),
+        facilities=facilities,
+    )
+
+
 def show_figure(output_dir: Path, filename: str):
     from IPython.display import Image, display
 
@@ -530,13 +738,20 @@ def run_task4(
     plan: str = "b",
     results: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Task 4 — anomalies (Plan B grid by default; Plan A uses simpler z-score)."""
+    """Task 4 — anomalies.
+
+    ``plan="c"`` uses the delivered Plan C estimate from the root Task 1
+    pipeline (stored as ``estimated_total_footfall``). ``plan="a"`` is kept as
+    a backwards-compatible alias for the same root-pipeline anomaly output.
+    """
+    normalized_plan = plan.lower()
     if results is not None:
-        key = "task4_b" if plan == "b" else "task4_a"
-        return {**results[key], "plan": "B" if plan == "b" else "A"}
+        key = "task4_b" if normalized_plan == "b" else "task4_a"
+        label = "B" if normalized_plan == "b" else "C"
+        return {**results[key], "plan": label}
 
     sessions, _, _ = load_data()
-    if plan == "b":
+    if normalized_plan == "b":
         pb = run_plan_b(force_recompute=force_recompute, write_outputs=False)
         return {
             "suspicious": pb["suspicious"],
@@ -554,7 +769,7 @@ def run_task4(
         "anomaly_hours": anomaly_hours,
         "anomaly_summary": anomaly_summary,
         "device_stats": device_stats,
-        "plan": "A",
+        "plan": "C",
     }
 
 
@@ -565,14 +780,15 @@ def plot_task4(
     save_plots: bool = True,
 ) -> Path:
     generate_task4_plots = _import_repo_src("plots_task4").generate_task4_plots
+    normalized_plan = plan.lower()
 
     if not save_plots:
         return PLOTS_DIR / "task4"
     if results is None:
-        t4 = run_task4(force_recompute=False, plan=plan)
+        t4 = run_task4(force_recompute=False, plan=normalized_plan)
         sessions, facilities, _ = load_data()
     else:
-        key = "task4_b" if plan == "b" else "task4_a"
+        key = "task4_b" if normalized_plan == "b" else "task4_a"
         t4 = results[key]
         sessions, facilities = results["sessions"], results["facilities"]
     return generate_task4_plots(

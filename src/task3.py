@@ -4,6 +4,8 @@ import pandas as pd
 
 from src.cleaning import build_quality_mask
 
+JOURNEY_SESSION_GAP_MINUTES = 60
+
 
 def run_task3(
     sessions: pd.DataFrame, facilities: pd.DataFrame
@@ -18,12 +20,25 @@ def run_task3(
     )
 
     events = events.copy()
-    events["prev_facility"] = events.groupby("device_id")["facility_num"].shift()
+    events["prev_seen"] = events.groupby("device_id")["session_start"].shift()
+    events["gap_minutes"] = (
+        (events["session_start"] - events["prev_seen"]).dt.total_seconds() / 60
+    )
+    events["journey_session_num"] = (
+        events["prev_seen"].isna()
+        | (events["gap_minutes"] > JOURNEY_SESSION_GAP_MINUTES)
+    ).groupby(events["device_id"]).cumsum()
+    events["journey_id"] = (
+        events["device_id"].astype(str)
+        + "_"
+        + events["journey_session_num"].astype(int).astype(str)
+    )
+    events["prev_facility"] = events.groupby("journey_id")["facility_num"].shift()
     events = events.loc[
         events["prev_facility"].isna()
         | (events["facility_num"] != events["prev_facility"])
     ]
-    events["next_facility"] = events.groupby("device_id")["facility_num"].shift(-1)
+    events["next_facility"] = events.groupby("journey_id")["facility_num"].shift(-1)
 
     transitions = events.loc[events["next_facility"].notna(), ["facility_num", "next_facility"]]
     transitions["next_facility"] = transitions["next_facility"].astype(int)
@@ -35,7 +50,7 @@ def run_task3(
     )
 
     journey_paths = (
-        events.groupby("device_id")
+        events.groupby(["device_id", "journey_id"], as_index=False)
         .agg(
             first_seen=("session_start", "min"),
             last_seen=("session_start", "max"),
@@ -43,13 +58,15 @@ def run_task3(
             path_steps=("facility_num", "size"),
             path=("facility_num", lambda x: " -> ".join(map(str, x.tolist()))),
         )
-        .reset_index()
     )
+    journey_paths = journey_paths.loc[journey_paths["path_steps"] > 1].copy()
     top_paths = (
-        journey_paths.groupby("path", as_index=False)["device_id"]
-        .nunique()
-        .rename(columns={"device_id": "device_count"})
-        .sort_values("device_count", ascending=False)
+        journey_paths.groupby("path", as_index=False)
+        .agg(
+            journey_count=("journey_id", "nunique"),
+            device_count=("device_id", "nunique"),
+        )
+        .sort_values("journey_count", ascending=False)
     )
     top_paths["path_length"] = top_paths["path"].str.count("->") + 1
 
@@ -70,4 +87,4 @@ def run_task3(
         how="left",
     )
 
-    return top_paths, transition_counts, sample, int(len(journey_paths))
+    return top_paths, transition_counts, sample, int(len(multi_ids))

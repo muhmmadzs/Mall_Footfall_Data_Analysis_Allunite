@@ -323,3 +323,214 @@ def plot_footfall_dashboard_interactive(
         "facility_dropdown": plot_facility_dropdown_interactive(hourly, facilities),
     }
     return figs
+
+
+def plot_task1_daily_mall_abc(
+    daily_long: pd.DataFrame,
+    mall_daily: Optional[pd.DataFrame] = None,
+):
+    """Daily mall totals for Plan A/B/C with optional mall-visitor bars."""
+    go, make_subplots = _require_plotly()
+
+    if daily_long is None or daily_long.empty:
+        print("No daily plan comparison data.")
+        return None
+
+    daily_long = daily_long.copy()
+    daily_long["date"] = pd.to_datetime(daily_long["date"])
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    for plan_name, color in [("Plan A", "#4a90d9"), ("Plan B", "#e67e22"), ("Plan C", "#9b59b6")]:
+        sub = daily_long.loc[daily_long["plan"] == plan_name].sort_values("date")
+        fig.add_trace(
+            go.Scatter(
+                x=sub["date"],
+                y=sub["daily_footfall"],
+                name=plan_name,
+                mode="lines+markers",
+                line=dict(color=color, width=2),
+            ),
+            secondary_y=False,
+        )
+
+    if mall_daily is not None and not mall_daily.empty and "estimated_mall_visitors" in mall_daily.columns:
+        md = mall_daily.copy()
+        md["date"] = pd.to_datetime(md["date"])
+        fig.add_trace(
+            go.Bar(
+                x=md["date"],
+                y=md["estimated_mall_visitors"],
+                name="Mall visitors (Plan B dedup)",
+                marker_color="rgba(39, 174, 96, 0.45)",
+            ),
+            secondary_y=True,
+        )
+
+    fig.update_layout(
+        title="Daily mall footfall — Plan A vs Plan B vs Plan C",
+        hovermode="x unified",
+        height=480,
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    )
+    fig.update_yaxes(title_text="Sensor-hour footfall (sum)", secondary_y=False)
+    fig.update_yaxes(title_text="Mall visitors", secondary_y=True)
+    _show(fig)
+    return fig
+
+
+def plot_task1_weekly_facility_abc(facility_weekly_long: pd.DataFrame, facilities: Optional[pd.DataFrame] = None):
+    """Weekly footfall by facility for Plan A/B/C."""
+    go, _ = _require_plotly()
+
+    if facility_weekly_long is None or facility_weekly_long.empty:
+        print("No weekly facility data.")
+        return None
+
+    labels = _facility_labels(facilities, facility_weekly_long["facility_num"].unique())
+    facility_weekly_long = facility_weekly_long.copy()
+    facility_weekly_long["facility_label"] = facility_weekly_long["facility_num"].map(labels)
+
+    fig = go.Figure()
+    for plan_name, color in [("Plan A", "#4a90d9"), ("Plan B", "#e67e22"), ("Plan C", "#9b59b6")]:
+        sub = facility_weekly_long.loc[facility_weekly_long["plan"] == plan_name]
+        fig.add_trace(
+            go.Bar(
+                x=sub["facility_label"],
+                y=sub["weekly_footfall"],
+                name=plan_name,
+                marker_color=color,
+            )
+        )
+
+    fig.update_layout(
+        title="Weekly footfall by location — Plan A vs Plan B vs Plan C",
+        barmode="group",
+        height=520,
+        template="plotly_white",
+        xaxis_tickangle=-35,
+        yaxis_title="Weekly estimated footfall",
+    )
+    _show(fig)
+    return fig
+
+
+def plot_task1_location_daily_abc(location_daily_long: pd.DataFrame, facilities: Optional[pd.DataFrame] = None):
+    """Per-location daily footfall with facility dropdown."""
+    go, _ = _require_plotly()
+
+    if location_daily_long is None or location_daily_long.empty:
+        print("No location daily data.")
+        return None
+
+    labels = _facility_labels(facilities, location_daily_long["facility_num"].unique())
+    facs = sorted(location_daily_long["facility_num"].astype(int).unique())
+    default_fac = facs[0]
+
+    traces = []
+    for fac in facs:
+        sub = location_daily_long.loc[location_daily_long["facility_num"] == fac].copy()
+        sub["date"] = pd.to_datetime(sub["date"])
+        for plan_name, color in [("Plan A", "#4a90d9"), ("Plan B", "#e67e22"), ("Plan C", "#9b59b6")]:
+            plan_sub = sub.loc[sub["plan"] == plan_name].sort_values("date")
+            traces.append(
+                go.Scatter(
+                    x=plan_sub["date"],
+                    y=plan_sub["daily_footfall"],
+                    mode="lines+markers",
+                    name=plan_name,
+                    line=dict(color=color, width=2),
+                    visible=(fac == default_fac),
+                )
+            )
+
+    buttons = []
+    for fi, fac in enumerate(facs):
+        visible = [False] * (3 * len(facs))
+        for j in range(3):
+            visible[3 * fi + j] = True
+        buttons.append(
+            dict(
+                label=labels[fac],
+                method="update",
+                args=[{"visible": visible}, {"title": f"Daily footfall — {labels[fac]}"}],
+            )
+        )
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        title=f"Daily footfall — {labels[default_fac]}",
+        updatemenus=[
+            dict(
+                buttons=buttons,
+                direction="down",
+                showactive=True,
+                x=0.0,
+                xanchor="left",
+                y=1.12,
+            )
+        ],
+        height=450,
+        template="plotly_white",
+        hovermode="x unified",
+        yaxis_title="Daily footfall",
+    )
+    _show(fig)
+    return fig
+
+
+def plot_task1_calibration_abc(calibration_long: pd.DataFrame):
+    """Manual calibration windows vs Plan A/B/C."""
+    go, _ = _require_plotly()
+
+    if calibration_long is None or calibration_long.empty:
+        print("No calibration comparison data.")
+        return None
+
+    fig = go.Figure()
+    for series, color, dash in [
+        ("Manual actual", "#2ecc71", None),
+        ("Plan A", "#4a90d9", None),
+        ("Plan B", "#e67e22", None),
+        ("Plan C", "#9b59b6", None),
+    ]:
+        sub = calibration_long.loc[calibration_long["series"] == series]
+        fig.add_trace(
+            go.Scatter(
+                x=sub["window_label"],
+                y=sub["count"],
+                mode="lines+markers",
+                name=series,
+                line=dict(color=color, width=2, dash=dash),
+            )
+        )
+
+    fig.update_layout(
+        title="Manual calibration windows — Plan A vs Plan B vs Plan C",
+        height=450,
+        template="plotly_white",
+        hovermode="x unified",
+        yaxis_title="Count",
+        xaxis_tickangle=-35,
+    )
+    _show(fig)
+    return fig
+
+
+def plot_task1_abc_dashboard(
+    daily_long: pd.DataFrame,
+    facility_weekly_long: pd.DataFrame,
+    location_daily_long: pd.DataFrame,
+    calibration_long: pd.DataFrame,
+    mall_daily: Optional[pd.DataFrame] = None,
+    mall_hourly: Optional[pd.DataFrame] = None,
+    facilities: Optional[pd.DataFrame] = None,
+):
+    """Interactive Task 1 dashboard for Plan A/B/C."""
+    return {
+        "daily_mall": plot_task1_daily_mall_abc(daily_long, mall_daily),
+        "weekly_facility": plot_task1_weekly_facility_abc(facility_weekly_long, facilities),
+        "location_daily": plot_task1_location_daily_abc(location_daily_long, facilities),
+        "calibration": plot_task1_calibration_abc(calibration_long),
+        "mall_hourly": plot_mall_visitors_hourly_interactive(mall_hourly),
+    }

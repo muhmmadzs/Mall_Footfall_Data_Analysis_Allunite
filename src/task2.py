@@ -10,8 +10,8 @@ from src.cleaning import build_quality_mask
 def run_task2(
     sessions: pd.DataFrame, facilities: pd.DataFrame
 ) -> tuple[pd.DataFrame, Dict[str, float]]:
-    clean = sessions.loc[build_quality_mask(sessions), ["device_id", "facility_num"]]
-    device_fac = clean.drop_duplicates()
+    clean = sessions.loc[build_quality_mask(sessions), ["device_id", "facility_num", "date"]]
+    device_fac = clean[["device_id", "facility_num"]].drop_duplicates()
 
     facility_counts = (
         device_fac.groupby("facility_num", as_index=False)["device_id"]
@@ -45,6 +45,27 @@ def run_task2(
     ).round(6)
     pair_counts["overlap_pct_smaller_side"] = (
         pair_counts["shared_devices"]
+        / pair_counts[["devices_facility_x", "devices_facility_y"]].min(axis=1)
+    ).round(6)
+
+    device_fac_day = clean.drop_duplicates(["device_id", "facility_num", "date"])
+    day_pairs = device_fac_day.merge(device_fac_day, on=["device_id", "date"])
+    day_pairs = day_pairs.loc[day_pairs["facility_num_x"] < day_pairs["facility_num_y"]]
+    same_day_counts = (
+        day_pairs.groupby(["facility_num_x", "facility_num_y"], as_index=False)["device_id"]
+        .nunique()
+        .rename(columns={"device_id": "shared_devices_same_day"})
+    )
+    pair_counts = pair_counts.merge(
+        same_day_counts,
+        on=["facility_num_x", "facility_num_y"],
+        how="left",
+    )
+    pair_counts["shared_devices_same_day"] = (
+        pair_counts["shared_devices_same_day"].fillna(0).astype(int)
+    )
+    pair_counts["same_day_overlap_pct_smaller_side"] = (
+        pair_counts["shared_devices_same_day"]
         / pair_counts[["devices_facility_x", "devices_facility_y"]].min(axis=1)
     ).round(6)
 

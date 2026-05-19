@@ -863,7 +863,7 @@ def run_task1(
 
     recommended_col = _prediction_column(recommended_name)
     hourly["footfall_recommended"] = hourly[recommended_col]
-    hourly["footfall_plan_a"] = hourly["footfall_recommended"]
+    hourly["footfall_plan_a"] = hourly["footfall_trusted_linear"]
     hourly["estimated_total_footfall"] = hourly["footfall_recommended"]
     hourly["task1_recommended_model"] = recommended_name
 

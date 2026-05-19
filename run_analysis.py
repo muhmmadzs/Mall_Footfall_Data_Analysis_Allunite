@@ -16,7 +16,7 @@ from src.paths import OUTPUT_DIR
 
 
 def main() -> None:
-    results = run_full_analysis(force_recompute=True, write_outputs=False)
+    results = run_full_analysis(force_recompute=True, write_outputs=True)
     plot_full_analysis(results, save_plots=True, plan="both")
     task1_result = results["plan_a"]["task1_result"]
     summary = {
